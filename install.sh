@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Installs ytune's dependencies (mpv, yt-dlp) via the system package
-# manager, then builds and installs the ytune binary itself.
+# Installs ytunes's dependencies (mpv, yt-dlp) via the system package
+# manager, then builds and installs the ytunes binary itself.
 set -euo pipefail
 
-BINARY_NAME="ytune"
+BINARY_NAME="ytunes"
 INSTALL_DIR="${HOME}/.local/bin"
 
 info()  { printf '\033[1;34m==>\033[0m %s\n' "$1"; }

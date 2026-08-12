@@ -2,8 +2,8 @@
 
 ![yTunes screenshot](assets/yTunes-aug26-screenshot.png)
 
-[![Go Build](https://github.com/sina96/ytunes-go-tui/actions/workflows/go.yml/badge.svg)](https://github.com/sina96/ytunes-go-tui/actions/workflows/go.yml)
-[![License: MIT](https://img.shields.io/github/license/sina96/ytunes-go-tui)](LICENSE)
+[![Go Build](https://github.com/sina96/ytunes/actions/workflows/go.yml/badge.svg)](https://github.com/sina96/ytunes/actions/workflows/go.yml)
+[![License: MIT](https://img.shields.io/github/license/sina96/ytunes)](LICENSE)
 
 A TUI audio player built in Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea/tree/main). 
 
@@ -24,12 +24,23 @@ Enjoy it with your theme choice! [dracula](https://github.com/dracula/dracula-th
 
 **Requirements:** [mpv](https://mpv.io) and
 [yt-dlp](https://github.com/yt-dlp/yt-dlp) must be installed and on your
-`PATH` — `ytune` shells out to both rather than bundling them (mpv and
+`PATH` — `ytunes` shells out to both rather than bundling them (mpv and
 yt-dlp are their own, separately licensed projects).
 
-Run the install script — it installs mpv/yt-dlp via your system's package
-manager (Homebrew on macOS; apt, dnf, or pacman on Linux) if they're
-missing, then builds and installs the `ytune` binary:
+**Already have Go?**
+
+```sh
+brew install mpv yt-dlp   # macOS — or your system's package manager
+go install github.com/sina96/ytunes@latest
+```
+
+This puts a `ytunes` binary in `$(go env GOPATH)/bin` — make sure that's
+on your `PATH`.
+
+**Don't have Go, or want it built from a local clone?** Run the install
+script — it installs mpv/yt-dlp via your system's package manager
+(Homebrew on macOS; apt, dnf, or pacman on Linux) if they're missing,
+then builds and installs the `ytunes` binary:
 
 ```sh
 ./install.sh

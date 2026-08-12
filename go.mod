@@ -1,4 +1,4 @@
-module github.com/sina96/ytunes-go-tui
+module github.com/sina96/ytunes
 
 go 1.26.5
 

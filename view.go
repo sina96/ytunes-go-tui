@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	utils "github.com/sina96/ytunes-go-tui/internal/utils"
+	utils "github.com/sina96/ytunes/internal/utils"
 )
 
 func (m model) renderHints(keymap help.KeyMap) string {

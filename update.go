@@ -7,7 +7,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"github.com/sina96/ytunes-go-tui/internal/player"
+	"github.com/sina96/ytunes/internal/player"
 )
 
 type metadataFetchedMsg struct {

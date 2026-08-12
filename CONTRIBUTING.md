@@ -1,6 +1,6 @@
 # Contributing
 
-`ytune` is primarily a personal Go learning project — the pace of
+`ytunes` is primarily a personal Go learning project — the pace of
 review and how much scope creep gets accepted reflects that. Bug
 reports and small, focused fixes are very welcome; large feature PRs
 are more likely to turn into a discussion first than a quick merge.

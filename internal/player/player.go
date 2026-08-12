@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	utils "github.com/sina96/ytunes-go-tui/internal/utils"
+	utils "github.com/sina96/ytunes/internal/utils"
 )
 
 type Player interface {
