@@ -1,0 +1,17 @@
+# Build artifacts
+/ytunes-go-tui.git
+/ytune
+*.exe
+*.test
+
+# OS cruft
+.DS_Store
+
+# Editor/tool-local settings
+.claude/
+
+# Docs: ignore all markdown except the ones meant to be public
+*.md
+!README.md
+!CONTRIBUTING.md
+!CHANGELOG.md
