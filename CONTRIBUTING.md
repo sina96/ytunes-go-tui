@@ -45,3 +45,7 @@ the app and exercising the affected screens/states directly.
 - Reference the issue it addresses, if any.
 - Keep it small where possible — easier to review, easier to revert if
   something's wrong.
+- Add a one-liner to `CHANGELOG.md` under the current version, tagged
+  with your PR number (e.g. `- Fix theme picker crash on empty list
+  (#42)`) — this is how the changelog stays a trustworthy record of
+  what shipped and where to find the discussion behind it.
