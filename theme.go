@@ -60,6 +60,7 @@ type Theme struct {
 	Error  color.Color
 	Border color.Color
 	Gray   color.Color
+	Peak   color.Color // hottest stop of the visualizer's gradient — deliberately distinct from Error
 }
 
 // Default
@@ -69,6 +70,7 @@ var ThemeDefault = Theme{
 	Error:  lipgloss.Color("196"),
 	Border: lipgloss.Color("62"),
 	Gray:   lipgloss.Color("235"),
+	Peak:   lipgloss.Color("214"), // orange
 }
 
 // Terminal-aligned — the 16 basic ANSI indices
@@ -78,6 +80,7 @@ var ThemeTerminal = Theme{
 	Error:  lipgloss.Color("1"), // red
 	Border: lipgloss.Color("4"), // blue
 	Gray:   lipgloss.Color("0"), // black
+	Peak:   lipgloss.Color("3"), // yellow
 }
 
 // Catppuccin (Mocha) — https://catppuccin.com/palette
@@ -87,6 +90,7 @@ var ThemeCatppuccin = Theme{
 	Error:  lipgloss.Color("#f38ba8"), // Red
 	Border: lipgloss.Color("#6c7086"), // Overlay0
 	Gray:   lipgloss.Color("#45475a"), // Surface1
+	Peak:   lipgloss.Color("#fab387"), // Peach
 }
 
 // Gruvbox (dark) — https://github.com/morhetz/gruvbox
@@ -96,6 +100,7 @@ var ThemeGruvbox = Theme{
 	Error:  lipgloss.Color("#fb4934"), // red
 	Border: lipgloss.Color("#665c54"), // subtle gray
 	Gray:   lipgloss.Color("#282828"), // bg1
+	Peak:   lipgloss.Color("#fe8019"), // orange
 }
 
 // Dracula — https://draculatheme.com/contribute
@@ -105,6 +110,7 @@ var ThemeDracula = Theme{
 	Error:  lipgloss.Color("#ff5555"), // Red
 	Border: lipgloss.Color("#6272a4"), // Current Line
 	Gray:   lipgloss.Color("#282a36"),
+	Peak:   lipgloss.Color("#ffb86c"), // Orange
 }
 
 // Themes is the picker's data source, in display order.

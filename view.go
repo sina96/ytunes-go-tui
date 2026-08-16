@@ -150,14 +150,27 @@ func (m model) renderSideBar() string {
 	return sidebarStyleFor(m.termHeight, m.theme).Align(lipgloss.Center).Render(content)
 }
 
-func (m model) renderFrame(topContent string) tea.View {
+func (m model) renderFrame(topContent, bottomExtra string) tea.View {
 	tabStrip := m.renderTabStrip()
 	fullTop := lipgloss.JoinVertical(lipgloss.Left, tabStrip, topContent)
 	playingRendered := playingPanelStyleFor(m.availableMainWidth(), m.theme).Render(m.renderPlayingPanel())
 
-	naturalTopHeight := lipgloss.Height(fullTop) + topPanelStyleFor(0, m.availableMainWidth(), m.theme).GetVerticalFrameSize()
+	panelStyle := topPanelStyleFor(0, m.availableMainWidth(), m.theme)
+
+	naturalTopHeight := lipgloss.Height(fullTop) + lipgloss.Height(bottomExtra) + panelStyle.GetVerticalFrameSize()
 	remaining := max(panelHeightFor(m.termHeight)-lipgloss.Height(playingRendered), naturalTopHeight)
-	topRendered := topPanelStyleFor(remaining, m.availableMainWidth(), m.theme).Render(fullTop)
+
+	finalPanelStyle := topPanelStyleFor(remaining, m.availableMainWidth(), m.theme)
+	innerHeight := remaining - finalPanelStyle.GetVerticalFrameSize()
+	innerWidth := getContentWidth(finalPanelStyle)
+
+	fullTopContent := fullTop
+	if bottomExtra != "" {
+		leftover := max(innerHeight-lipgloss.Height(fullTop), 0)
+		placed := lipgloss.Place(innerWidth, leftover, lipgloss.Center, lipgloss.Bottom, bottomExtra)
+		fullTopContent = lipgloss.JoinVertical(lipgloss.Left, fullTop, placed)
+	}
+	topRendered := finalPanelStyle.Render(fullTopContent)
 	if m.minimal {
 		rule := getTitleStyle(m.theme).Render(nameRule(lipgloss.Width(topRendered)))
 		stacked := lipgloss.JoinVertical(lipgloss.Center, rule, topRendered, playingRendered)
@@ -221,7 +234,7 @@ func (m model) idleView() tea.View {
 
 	content := lipgloss.JoinVertical(lipgloss.Top, title, label, textInputView, footerStyled)
 	c := m.setCursor(header, topPanelStyleFor(panelHeightFor(m.termHeight), m.availableMainWidth(), m.theme), label)
-	v := m.renderFrame(content)
+	v := m.renderFrame(content, "")
 	v.Cursor = c
 	return v
 }
@@ -236,7 +249,7 @@ func (m model) errorView() tea.View {
 	content := lipgloss.JoinVertical(lipgloss.Top, title, label, textInputView, footerStyled)
 
 	c := m.setCursor(header, topPanelStyleFor(panelHeightFor(m.termHeight), m.availableMainWidth(), m.theme), label)
-	v := m.renderFrame(content)
+	v := m.renderFrame(content, "")
 	v.Cursor = c
 	return v
 }
@@ -253,7 +266,7 @@ func (m model) stoppedView() tea.View {
 
 	content := lipgloss.JoinVertical(lipgloss.Top, title, playAnother, textInputView, footerStyled)
 	c := m.setCursor(header, topPanelStyleFor(panelHeightFor(m.termHeight), m.availableMainWidth(), m.theme), playAnother)
-	v := m.renderFrame(content)
+	v := m.renderFrame(content, "")
 	v.Cursor = c
 	return v
 }
@@ -284,11 +297,18 @@ func (m model) playingView() tea.View {
 	topPanelWidth := getContentWidth(topPanelStyleFor(panelHeightFor(m.termHeight), m.availableMainWidth(), m.theme))
 	audioTitle := getLabelStyle(m.theme).Render(utils.TruncateTitle(audioInfo, topPanelWidth))
 
-	playingFooter := m.topPanelFooter(playingKeys)
+	keys := playingKeys
+	keys.Next.SetEnabled(m.queueIndex+1 < len(m.queue))
+	keys.Prev.SetEnabled(m.queueIndex > 0)
+	playingFooter := m.topPanelFooter(keys)
+	visualizer := ""
+	if !m.minimal {
+		visualizer = "\n" + renderVisualizer(m.visualizerBars, m.availableMainWidth(), m.theme)
+	}
 
 	content := lipgloss.JoinVertical(lipgloss.Top, title, status, audioTitle, playingFooter)
 
-	v := m.renderFrame(content)
+	v := m.renderFrame(content, visualizer)
 	return v
 }
 
@@ -298,7 +318,7 @@ func (m model) loadingView() tea.View {
 	loadingLabel := getLabelStyle(m.theme).Render(labelLoading)
 	content := lipgloss.JoinVertical(lipgloss.Top, title, loadingLabel)
 
-	v := m.renderFrame(content)
+	v := m.renderFrame(content, "")
 	v.ProgressBar = tea.NewProgressBar(tea.ProgressBarIndeterminate, 0)
 	return v
 }

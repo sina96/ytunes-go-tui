@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/charmbracelet/harmonica"
 	"github.com/sina96/ytunes/internal/player"
 )
 
@@ -47,6 +48,7 @@ type model struct {
 	positionSeq        int
 	pausePending       bool
 	tickGen            int
+	playGen            int
 	progress           progress.Model
 	help               help.Model
 	theme              Theme
@@ -54,6 +56,8 @@ type model struct {
 	themeList          list.Model
 	showQueueModeLabel bool
 	queueModeShownAt   time.Time
+	visualizerBars     []visualizerBar
+	visualizerSpring   harmonica.Spring
 }
 
 func newTextInput() textinput.Model {

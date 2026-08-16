@@ -11,6 +11,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/harmonica"
 	"github.com/sina96/ytunes/internal/player"
 )
 
@@ -41,19 +42,24 @@ func initialModel(minimal bool) model {
 	themeList := newThemeList(0, 0, "Pick a theme")
 	theme := loadSavedTheme()
 
+	visualizerBars := newVisualizerBars()
+	visualizerSpring := harmonica.NewSpring(harmonica.FPS(10), 6.0, 1.0) //angularFrequency/dampingRatio
+
 	return model{
-		minimal:        minimal,
-		now:            time.Now(),
-		tabs:           tabs,
-		activeTab:      0,
-		textInput:      ti,
-		player:         player,
-		loadingSpinner: loadingSpinner,
-		playingSpinner: playingSpinner,
-		progress:       progress,
-		help:           help,
-		theme:          theme,
-		themeList:      themeList,
+		minimal:          minimal,
+		now:              time.Now(),
+		tabs:             tabs,
+		activeTab:        0,
+		textInput:        ti,
+		player:           player,
+		loadingSpinner:   loadingSpinner,
+		playingSpinner:   playingSpinner,
+		progress:         progress,
+		help:             help,
+		theme:            theme,
+		themeList:        themeList,
+		visualizerBars:   visualizerBars,
+		visualizerSpring: visualizerSpring,
 	}
 }
 

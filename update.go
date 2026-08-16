@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"math"
+	"math/rand"
 	"time"
 
 	"charm.land/bubbles/v2/progress"
@@ -179,6 +181,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.confirmQuitting = false
 		}
 		return m, nil
+
+	case visualizerTickMsg:
+		if m.state != StatePlaying {
+			return m, nil
+		}
+		paused := m.player.IsPaused() || m.pausePending
+		for i := range m.visualizerBars {
+			bar := &m.visualizerBars[i]
+			if paused {
+				bar.target = 0
+			} else if rand.Float64() < visualizerRetargetChance {
+				bar.target = rand.Float64()
+			}
+			bar.pos, bar.vel = m.visualizerSpring.Update(bar.pos, bar.vel, bar.target)
+			if math.Abs(bar.pos-bar.target) < 0.01 && math.Abs(bar.vel) < 0.01 {
+				bar.pos, bar.vel = bar.target, 0
+			}
+		}
+		return m, tickVisualizer()
 	case metadataFetchedMsg:
 		if msg.err != nil {
 			if m.queue != nil {
@@ -195,17 +216,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.queue = msg.queue
 		m.state = StatePlaying
 		m.tickGen++
+		m.playGen++
 		gen := m.tickGen
-		return m, tea.Batch(m.playingSpinner.Tick, tickPosition(gen),
+		playGen := m.playGen
+		return m, tea.Batch(m.playingSpinner.Tick, tickPosition(gen), tickVisualizer(),
 			func() tea.Msg {
 				err := m.player.Wait()
 				if err != nil {
-					return playbackFinishedMsg{err, gen}
+					return playbackFinishedMsg{err, playGen}
 				}
-				return playbackFinishedMsg{nil, gen}
+				return playbackFinishedMsg{nil, playGen}
 			})
 	case playbackFinishedMsg:
-		if msg.seq != m.tickGen {
+		if msg.seq != m.playGen {
 			return m, nil
 		}
 		if m.userStopped {

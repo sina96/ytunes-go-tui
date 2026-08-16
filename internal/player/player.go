@@ -126,7 +126,7 @@ func buildPlayCommand(url string, ipcPath string) (*exec.Cmd, string, error) {
 
 	mpvPath, err := exec.LookPath("mpv")
 	if err != nil {
-		return nil, "", fmt.Errorf("mpv not found. Please install it and try again.")
+		return nil, "", fmt.Errorf("mpv not found. Please install it and try again")
 	}
 
 	// workaround for YouTube's current anti-bot/PO-Token 403s the
@@ -136,6 +136,7 @@ func buildPlayCommand(url string, ipcPath string) (*exec.Cmd, string, error) {
 	rawOptions := fmt.Sprintf("extractor-args=%%%d%%%s", len(extractorArgs), extractorArgs)
 
 	cmd := exec.Command(mpvPath, "--no-video", "--ytdl-format=bestaudio", "--ytdl-raw-options="+rawOptions, "--input-ipc-server="+ipcPath, trimmedUrl)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	return cmd, trimmedUrl, nil
 }
 
@@ -156,7 +157,7 @@ func connectIPC(path string) (net.Conn, error) {
 func fetchMetadata(url string) (Metadata, error) {
 	ytbdlpPath, err := exec.LookPath("yt-dlp")
 	if err != nil {
-		return Metadata{}, fmt.Errorf("yt-dlp not found. Please install it and try again.")
+		return Metadata{}, fmt.Errorf("yt-dlp not found. Please install it and try again")
 	}
 	cmd := exec.Command(ytbdlpPath, "--no-playlist", "--print", "title,duration", url)
 	stdout, err := cmd.Output()
@@ -186,7 +187,7 @@ func fetchPlayUrlForQueue(url string, index int, queue []QueueEntry) string {
 func (p *mpvPlayer) ResolveQueue(url string) ([]QueueEntry, error) {
 	ytbdlpPath, err := exec.LookPath("yt-dlp")
 	if err != nil {
-		return nil, fmt.Errorf("yt-dlp not found. Please install it and try again.")
+		return nil, fmt.Errorf("yt-dlp not found. Please install it and try again")
 	}
 	cmd := exec.Command(ytbdlpPath, "--flat-playlist", "--dump-single-json", url)
 	stdout, err := cmd.Output()
@@ -290,7 +291,7 @@ func (p *mpvPlayer) Stop() error {
 	}
 	if p.paused {
 		if p.cmd.Process != nil {
-			err := p.cmd.Process.Signal(syscall.SIGCONT)
+			err := syscall.Kill(-p.cmd.Process.Pid, syscall.SIGCONT)
 			if err != nil {
 				return err
 			}
@@ -298,7 +299,7 @@ func (p *mpvPlayer) Stop() error {
 	}
 	p.paused = false
 	if p.cmd.Process != nil {
-		err := p.cmd.Process.Signal(syscall.SIGINT)
+		err := syscall.Kill(-p.cmd.Process.Pid, syscall.SIGINT)
 		if err != nil {
 			return err
 		}
