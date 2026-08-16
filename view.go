@@ -11,15 +11,37 @@ import (
 	utils "github.com/sina96/ytunes/internal/utils"
 )
 
+func (m model) windowTitle() string {
+	if m.state != StatePlaying {
+		return windowTitleBase
+	}
+	if m.player.IsPaused() {
+		return windowTitleBase + " • Paused"
+	}
+	return windowTitleBase + " • Playing"
+}
+
 func (m model) renderHints(keymap help.KeyMap) string {
-	return m.help.View(keymap)
+	hints := m.help.View(keymap)
+	if m.showQueueModeLabel {
+		hints += getMutedLabelStyle(m.theme).Render(queueModeLabel(m.playlistMode))
+	}
+	return hints
 }
 
 func (m model) confirmQuitLabel() string {
 	if !m.confirmQuitting {
 		return ""
 	}
-	return getMutedLabelStyle(m.theme).Render(labelConfirmQuit)
+	return getMutedLabelStyle(m.theme).Render("  " + labelConfirmQuit)
+}
+
+func queueModeLabel(on bool) string {
+	str := "(queue mode is now: "
+	if on {
+		return str + "ON)"
+	}
+	return str + "OFF)"
 }
 
 func (m model) topPanelFooter(keymap help.KeyMap) string {
@@ -141,6 +163,7 @@ func (m model) renderFrame(topContent string) tea.View {
 		stacked := lipgloss.JoinVertical(lipgloss.Center, rule, topRendered, playingRendered)
 		v := tea.NewView(stacked)
 		v.AltScreen = true
+		v.WindowTitle = m.windowTitle()
 		return v
 	}
 
@@ -150,6 +173,7 @@ func (m model) renderFrame(topContent string) tea.View {
 	fullContent := lipgloss.JoinHorizontal(lipgloss.Top, sideBar, stackedColumn)
 	v := tea.NewView(fullContent)
 	v.AltScreen = true
+	v.WindowTitle = m.windowTitle()
 	return v
 }
 
@@ -158,6 +182,7 @@ func (m model) themePickerView() tea.View {
 	content := lipgloss.JoinVertical(lipgloss.Top, m.themeList.View())
 	v := tea.NewView(content)
 	v.AltScreen = true
+	v.WindowTitle = m.windowTitle()
 	return v
 }
 
@@ -236,6 +261,11 @@ func (m model) stoppedView() tea.View {
 func (m model) playingView() tea.View {
 	header := m.defaultHeader()
 	statusView := "\n" + m.playingSpinner.View() + " Playing\n"
+	upNextLine := ""
+	if m.queueIndex+1 < len(m.queue) {
+		upNextLine = "\n" + getMutedLabelStyle(m.theme).Render("Up next: "+m.queue[m.queueIndex+1].Title)
+	}
+
 	switch {
 	case m.pausePending && m.player.IsPaused():
 		statusView = "\n" + m.loadingSpinner.View() + " Resuming...\n"
@@ -250,7 +280,7 @@ func (m model) playingView() tea.View {
 	}
 
 	title := getTitleStyle(m.theme).Render(header)
-	status := getStatusStyle(m.theme).Render(statusView)
+	status := getStatusStyle(m.theme).Render(statusView) + upNextLine
 	topPanelWidth := getContentWidth(topPanelStyleFor(panelHeightFor(m.termHeight), m.availableMainWidth(), m.theme))
 	audioTitle := getLabelStyle(m.theme).Render(utils.TruncateTitle(audioInfo, topPanelWidth))
 

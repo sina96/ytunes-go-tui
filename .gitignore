@@ -1,6 +1,6 @@
 # Build artifacts
 /ytunes-go-tui.git
-/ytune
+/ytunes
 *.exe
 *.test
 

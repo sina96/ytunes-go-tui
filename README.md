@@ -67,6 +67,7 @@ Enjoy it with your theme choice! [dracula](https://github.com/dracula/dracula-th
 ### Known Issues
 - **First pause Latency** — the first time you pause, there may be a noticeable delay before the pause is registered. Timer acts weird. as i said i got help from ai for ipc and i am not proud of it
 - **Windows Support** —  Not supported yet. Sorry
+- **Some videos fail to play** — YouTube's current anti-bot/PO-Token enforcement blocks some videos for `yt-dlp`/`mpv` entirely; this is upstream of `ytunes` and not something it can fix directly (see [yt-dlp's PO Token Guide](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide)).
 
 ## Contributing
 

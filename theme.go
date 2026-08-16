@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"image/color"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -59,8 +62,7 @@ type Theme struct {
 	Gray   color.Color
 }
 
-// Default — today's exact palette from style.go, unchanged, so switching
-// to Default after this refactor renders pixel-identical to before it.
+// Default
 var ThemeDefault = Theme{
 	Accent: lipgloss.Color("205"),
 	Muted:  lipgloss.Color("241"),
@@ -69,9 +71,7 @@ var ThemeDefault = Theme{
 	Gray:   lipgloss.Color("235"),
 }
 
-// Terminal-aligned — the 16 basic ANSI indices (0-15) i
-// so it follows whatever color scheme the user's own te
-// rather than fixed RGB values.
+// Terminal-aligned — the 16 basic ANSI indices
 var ThemeTerminal = Theme{
 	Accent: lipgloss.Color("5"), // magenta
 	Muted:  lipgloss.Color("8"), // bright black (gray)
@@ -117,4 +117,44 @@ var Themes = []struct {
 	{"Catppuccin", ThemeCatppuccin},
 	{"Gruvbox", ThemeGruvbox},
 	{"Dracula", ThemeDracula},
+}
+
+func themeConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".config", "ytunes", "theme"), nil
+}
+
+func loadSavedTheme() Theme {
+	path, err := themeConfigPath()
+	if err != nil {
+		return ThemeDefault
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ThemeDefault
+	}
+
+	name := strings.TrimSpace(string(data))
+	for _, theme := range Themes {
+		if theme.Name == name {
+			return theme.Theme
+		}
+	}
+	return ThemeDefault
+}
+
+func saveTheme(name string) error {
+	path, err := themeConfigPath()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, []byte(name), 0644)
 }

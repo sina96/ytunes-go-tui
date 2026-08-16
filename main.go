@@ -39,6 +39,7 @@ func initialModel(minimal bool) model {
 	help := help.New()
 
 	themeList := newThemeList(0, 0, "Pick a theme")
+	theme := loadSavedTheme()
 
 	return model{
 		minimal:        minimal,
@@ -51,7 +52,7 @@ func initialModel(minimal bool) model {
 		playingSpinner: playingSpinner,
 		progress:       progress,
 		help:           help,
-		theme:          ThemeDefault,
+		theme:          theme,
 		themeList:      themeList,
 	}
 }

@@ -24,30 +24,36 @@ const (
 )
 
 type model struct {
-	minimal         bool
-	now             time.Time
-	tabs            []string
-	activeTab       int
-	termWidth       int
-	termHeight      int
-	textInput       textinput.Model
-	err             error
-	state           State
-	player          player.Player
-	metadata        player.Metadata
-	userStopped     bool
-	confirmQuitting bool
-	quitArmedAt     time.Time
-	loadingSpinner  spinner.Model
-	playingSpinner  spinner.Model
-	elapsedSeconds  float64
-	positionSeq     int
-	pausePending    bool
-	progress        progress.Model
-	help            help.Model
-	theme           Theme
-	pickingTheme    bool
-	themeList       list.Model
+	minimal            bool
+	playlistMode       bool
+	now                time.Time
+	tabs               []string
+	activeTab          int
+	termWidth          int
+	termHeight         int
+	textInput          textinput.Model
+	err                error
+	state              State
+	player             player.Player
+	queue              []player.QueueEntry
+	queueIndex         int
+	metadata           player.Metadata
+	userStopped        bool
+	confirmQuitting    bool
+	quitArmedAt        time.Time
+	loadingSpinner     spinner.Model
+	playingSpinner     spinner.Model
+	elapsedSeconds     float64
+	positionSeq        int
+	pausePending       bool
+	tickGen            int
+	progress           progress.Model
+	help               help.Model
+	theme              Theme
+	pickingTheme       bool
+	themeList          list.Model
+	showQueueModeLabel bool
+	queueModeShownAt   time.Time
 }
 
 func newTextInput() textinput.Model {

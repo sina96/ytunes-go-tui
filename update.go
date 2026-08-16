@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"charm.land/bubbles/v2/progress"
@@ -12,9 +13,13 @@ import (
 
 type metadataFetchedMsg struct {
 	metadata player.Metadata
+	queue    []player.QueueEntry
 	err      error
 }
-type playbackFinishedMsg struct{ err error }
+type playbackFinishedMsg struct {
+	err error
+	seq int
+}
 
 type quitTimeoutMsg struct {
 	armedAt time.Time
@@ -30,14 +35,40 @@ type pauseToggleMsg struct {
 	err error
 }
 
-// positionTickMsg drives the on-screen elapsed-time display on a fixed,
-// local cadence — independent of how long any given mpv IPC round-trip
-// takes, so the display stays smooth even when a query is briefly slow.
-type positionTickMsg time.Time
+type themeSavedMsg struct {
+	err error
+}
 
-func tickPosition() tea.Cmd {
+// positionTickMsg positionTickMsg now carries the generation
+type positionTickMsg struct {
+	seq int
+}
+
+type queueModeHideMsg struct {
+	shownAt time.Time
+}
+
+func tickPosition(gen int) tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
-		return positionTickMsg(t)
+		return positionTickMsg{seq: gen}
+	})
+}
+
+func (m model) playQueueEntry(index int) (model, tea.Cmd) {
+	if index < 0 || index >= len(m.queue) {
+		return m, nil
+	}
+	m.queueIndex = index
+	m.state = StateLoading
+	m.elapsedSeconds = 0
+
+	return m, tea.Batch(m.loadingSpinner.Tick, m.progress.SetPercent(0), func() tea.Msg {
+		m.player.Stop()
+		meta, err := m.player.Play("", index, m.queue)
+		if err != nil {
+			return metadataFetchedMsg{err: err}
+		}
+		return metadataFetchedMsg{metadata: meta, queue: m.queue}
 	})
 }
 
@@ -53,6 +84,12 @@ func queryPosition(m model, seq int) tea.Cmd {
 	}
 }
 
+func hideQueueModeLabel(shownAt time.Time) tea.Cmd {
+	return tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+		return queueModeHideMsg{shownAt: shownAt}
+	})
+}
+
 func (m model) Init() tea.Cmd {
 	return tea.Batch(textinput.Blink, tickClock())
 }
@@ -66,6 +103,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.termWidth = msg.Width
 		m.termHeight = msg.Height
 		m.themeList.SetSize(msg.Width, msg.Height)
+		return m, nil
+
+	case queueModeHideMsg:
+		if msg.shownAt.Equal(m.queueModeShownAt) {
+			m.showQueueModeLabel = false
+			return m, nil
+		}
+		return m, nil
+
+	case themeSavedMsg:
+		if msg.err != nil {
+			m.err = fmt.Errorf("could not save theme: %w", msg.err)
+		}
 		return m, nil
 
 	case clockTickMsg:
@@ -84,13 +134,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 	case positionTickMsg:
+		if msg.seq != m.tickGen {
+			return m, nil
+		}
+
 		if m.state != StatePlaying || m.player.IsPaused() || m.pausePending {
 			return m, nil
 		}
 		m.elapsedSeconds++
 		pcmd := m.progress.SetPercent(m.elapsedSeconds / float64(m.metadata.DurationSeconds))
 		m.positionSeq++
-		return m, tea.Batch(pcmd, tickPosition(), queryPosition(m, m.positionSeq))
+		return m, tea.Batch(pcmd, tickPosition(m.tickGen), queryPosition(m, m.positionSeq))
 	case positionMsg:
 		if msg.seq != m.positionSeq || msg.err != nil {
 			// stale (an older query resolving after a newer one already
@@ -112,8 +166,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.state == StatePlaying && !m.player.IsPaused() {
+			m.tickGen++
 			m.positionSeq++
-			return m, tea.Batch(tickPosition(), queryPosition(m, m.positionSeq), m.playingSpinner.Tick)
+			return m, tea.Batch(tickPosition(m.tickGen), queryPosition(m, m.positionSeq), m.playingSpinner.Tick)
 		}
 		return m, nil
 	case progress.FrameMsg:
@@ -126,28 +181,42 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case metadataFetchedMsg:
 		if msg.err != nil {
+			if m.queue != nil {
+				if m.queueIndex+1 < len(m.queue) {
+					return m.playQueueEntry(m.queueIndex + 1)
+				}
+			}
 			m.err = msg.err
 			m.state = StateIdle
 			m, cmd = m.resetTextInput()
 			return m, cmd
 		}
 		m.metadata = msg.metadata
-
+		m.queue = msg.queue
 		m.state = StatePlaying
-		return m, tea.Batch(m.playingSpinner.Tick, tickPosition(),
+		m.tickGen++
+		gen := m.tickGen
+		return m, tea.Batch(m.playingSpinner.Tick, tickPosition(gen),
 			func() tea.Msg {
 				err := m.player.Wait()
 				if err != nil {
-					return playbackFinishedMsg{err}
+					return playbackFinishedMsg{err, gen}
 				}
-				return playbackFinishedMsg{nil}
+				return playbackFinishedMsg{nil, gen}
 			})
 	case playbackFinishedMsg:
+		if msg.seq != m.tickGen {
+			return m, nil
+		}
 		if m.userStopped {
 			m.userStopped = false
 		} else if msg.err != nil {
 			m.err = msg.err
+		} else if m.queueIndex+1 < len(m.queue) {
+			return m.playQueueEntry(m.queueIndex + 1)
 		}
+		m.queue = nil
+		m.queueIndex = 0
 		m.state = StateStopped
 		m, cmd = m.resetTextInput()
 		return m, cmd
@@ -156,10 +225,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.pickingTheme {
 			key := msg.String()
 			if key == "enter" {
-				m.theme = Themes[m.themeList.Index()].Theme
+				selected := Themes[m.themeList.Index()]
+				m.theme = selected.Theme
 				m.progress = progress.New(getProgressBarOptions(m.theme)...)
 				m.pickingTheme = false
-				return m, nil
+				return m, func() tea.Msg {
+					err := saveTheme(selected.Name)
+					return themeSavedMsg{err}
+				}
 			}
 
 			if key == "esc" {
@@ -182,11 +255,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.textInput.Blur()
 			url := m.textInput.Value()
 			return m, tea.Batch(m.loadingSpinner.Tick, func() tea.Msg {
-				meta, err := m.player.Play(url)
+				var queue []player.QueueEntry
+				var err error
+				if m.playlistMode {
+					queue, err = m.player.ResolveQueue(url)
+					if err != nil {
+						return metadataFetchedMsg{err: err}
+					}
+				}
+
+				meta, err := m.player.Play(url, 0, queue)
 				if err != nil {
 					return metadataFetchedMsg{err: err}
 				}
-				return metadataFetchedMsg{metadata: meta}
+				return metadataFetchedMsg{metadata: meta, queue: queue}
 			})
 		case "ctrl+v", "ctrl+p":
 			m.confirmQuitting = false
@@ -195,6 +277,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "ctrl+c":
+			if m.state == StateLoading {
+				return m, nil
+			}
+
 			if m.confirmQuitting {
 				if m.state == StatePlaying {
 					m.player.Stop()
@@ -224,6 +310,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 			}
 			return m, nil
+		case "right", "l":
+			if m.state == StatePlaying {
+				if m.queueIndex+1 < len(m.queue) {
+					return m.playQueueEntry(m.queueIndex + 1)
+				}
+				return m, nil
+			}
+			return m, nil
+		case "left", "h":
+			if m.state == StatePlaying {
+				if m.queueIndex-1 > 0 {
+					return m.playQueueEntry(m.queueIndex - 1)
+				}
+				return m, nil
+			}
+			return m, nil
 		case "esc":
 			m.confirmQuitting = false
 			if m.state == StatePlaying {
@@ -234,6 +336,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+t":
 			m.pickingTheme = true
 			return m, nil
+		case "ctrl+q":
+			m.playlistMode = !m.playlistMode
+			m.showQueueModeLabel = true
+			m.queueModeShownAt = time.Now()
+			return m, hideQueueModeLabel(m.queueModeShownAt)
 		default:
 			m.confirmQuitting = false
 		}

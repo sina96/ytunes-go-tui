@@ -3,9 +3,10 @@ package main
 const (
 
 	// side bar
-	appTitle   = "yTunes"
-	appVersion = "v0.1.0"
-	logo       = `
+	appTitle        = "yTunes"
+	windowTitleBase = "y𝕋unes"
+	appVersion      = "v0.1.0"
+	logo            = `
  __  ____     ____  __
  \ \/ / /____/_  / / /
   \  / __/ _ \/ /_/_/
