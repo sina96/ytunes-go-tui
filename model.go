@@ -79,7 +79,7 @@ func (m model) resetTextInput() (model, tea.Cmd) {
 
 func (m model) availableMainWidth() int {
 	if m.minimal {
-		return m.termWidth - 4 // small margin, no sidebar to reserve for
+		return m.termWidth // small margin, no sidebar to reserve for
 	}
 	return m.termWidth - lipgloss.Width(m.renderSideBar())
 }
