@@ -14,6 +14,7 @@ const (
 	`
 
 	sidebarMinHeight = 11 // logo + title + version + spacer + clock + padding + border
+	sidebarWidth     = 26
 
 	// labels
 	labelIdlePlaceholder  = "play that tubez!"         // was duplicated in view.go twice
@@ -22,4 +23,5 @@ const (
 	labelLastPlayedPrefix = "LastPlayed: "
 	labelPlayAnother      = "\nPlay Another url:"
 	labelLoading          = "\nLoading..."
+	labelYtbPlayer        = "Youtube audio player"
 )

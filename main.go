@@ -45,6 +45,9 @@ func initialModel(minimal bool) model {
 	visualizerBars := newVisualizerBars()
 	visualizerSpring := harmonica.NewSpring(harmonica.FPS(10), 6.0, 1.0) //angularFrequency/dampingRatio
 
+	img, _ := decodeSidebarImage()
+	sidebarImageSrc := img
+
 	return model{
 		minimal:          minimal,
 		now:              time.Now(),
@@ -60,6 +63,7 @@ func initialModel(minimal bool) model {
 		themeList:        themeList,
 		visualizerBars:   visualizerBars,
 		visualizerSpring: visualizerSpring,
+		sidebarImageSrc:  sidebarImageSrc,
 	}
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"image"
 	"time"
 
 	"charm.land/bubbles/v2/help"
@@ -58,6 +59,10 @@ type model struct {
 	queueModeShownAt   time.Time
 	visualizerBars     []visualizerBar
 	visualizerSpring   harmonica.Spring
+	sidebarImageSrc    image.Image
+	sidebarImage       string
+	sidebarImageWidth  int
+	sidebarImageHeight int
 }
 
 func newTextInput() textinput.Model {
@@ -81,5 +86,5 @@ func (m model) availableMainWidth() int {
 	if m.minimal {
 		return m.termWidth // small margin, no sidebar to reserve for
 	}
-	return m.termWidth - lipgloss.Width(m.renderSideBar())
+	return m.termWidth - lipgloss.Width(m.renderSidebar(0))
 }

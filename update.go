@@ -4,12 +4,16 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/mosaic" //experimental
+
 	"github.com/sina96/ytunes/internal/player"
 )
 
@@ -326,6 +330,34 @@ func (m model) handleKeyPress(msg tea.KeyPressMsg) (model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m model) handleWindowSizeMsg(msg tea.WindowSizeMsg) (model, tea.Cmd) {
+	m.termWidth = msg.Width
+	m.termHeight = msg.Height
+	m.themeList.SetSize(msg.Width, msg.Height)
+	if m.sidebarImageSrc != nil {
+		sidebarStyle := sidebarStyleFor(m.termHeight, m.theme)
+		w := getContentWidth(sidebarStyle)
+
+		headerContent := lipgloss.JoinVertical(lipgloss.Center,
+			getTitleStyle(m.theme).Render(strings.TrimSpace(logo)),
+			getTitleStyle(m.theme).Render(appTitle),
+			getLabelStyle(m.theme).Render(appVersion))
+		headerHeight := lipgloss.Height(headerContent)
+
+		availableForImage := sidebarStyle.GetHeight() - sidebarStyle.GetVerticalFrameSize() - headerHeight - 1
+		squareHeight := w / 2
+		h := min(squareHeight, max(availableForImage, 0))
+
+		if w != m.sidebarImageWidth || h != m.sidebarImageHeight {
+			newMosaic := mosaic.New().Width(w * 2).Height(h * 2)
+			m.sidebarImage = newMosaic.Render(m.sidebarImageSrc)
+			m.sidebarImageWidth = w
+			m.sidebarImageHeight = h
+		}
+	}
+	return m, nil
+}
+
 func (m model) Init() tea.Cmd {
 	return tea.Batch(textinput.Blink, tickClock())
 }
@@ -336,10 +368,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
-		m.termWidth = msg.Width
-		m.termHeight = msg.Height
-		m.themeList.SetSize(msg.Width, msg.Height)
-		return m, nil
+		return m.handleWindowSizeMsg(msg)
 
 	case queueModeHideMsg:
 		if msg.shownAt.Equal(m.queueModeShownAt) {
@@ -366,11 +395,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case positionMsg:
 		if msg.seq != m.positionSeq || msg.err != nil {
-			// stale
-			return m, nil
+			return m, nil // stale
 		}
 		if m.state != StatePlaying || m.player.IsPaused() || m.pausePending {
-			return m, nil
+			return m, nil // paused
 		}
 		m.elapsedSeconds = msg.seconds
 		return m, m.progress.SetPercent(msg.seconds / float64(m.metadata.DurationSeconds))

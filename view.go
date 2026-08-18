@@ -127,15 +127,25 @@ func (m model) renderTabStrip() string {
 	return strings.Join(labels, " ")
 }
 
-func (m model) renderSideBar() string {
+func (m model) renderSidebar(playingPanelStartRow int) string {
 	logoBox := getTitleStyle(m.theme).Render(strings.TrimSpace(logo))
 	titleBox := getTitleStyle(m.theme).Render(appTitle)
 	versionText := getLabelStyle(m.theme).Render(appVersion)
-	content := lipgloss.JoinVertical(lipgloss.Center, logoBox, titleBox, versionText)
+	top := lipgloss.JoinVertical(lipgloss.Center, logoBox, titleBox, versionText)
 
-	dateAndTime := strings.ToLower(m.now.Format("Mon 2 Jan.")) + " " + m.now.Format("15:04")
-	topEdge := getBorderStyle(m.theme).Render(labeledTopEdge(lipgloss.RoundedBorder(), dateAndTime, 26))
-	box := sidebarStyleFor(m.termHeight, m.theme).Align(lipgloss.Center).Render(content)
+	sidebarStyle := sidebarStyleFor(m.termHeight, m.theme)
+	body := top
+	if m.state == StatePlaying && m.sidebarImage != "" {
+		spacerLines := max(playingPanelStartRow-1-lipgloss.Height(top), 0) // -1: sidebar's own box content starts 1 row below screenthe topEdge label row
+		maxSpacer := max(
+			sidebarStyle.GetHeight()-sidebarStyle.GetVerticalFrameSize()-lipgloss.Height(top)-m.sidebarImageHeight-1, 0)
+		spacerLines = min(spacerLines, maxSpacer)
+		body = top + strings.Repeat("\n", spacerLines+1) + m.sidebarImage
+	}
+
+	dateAndTime := strings.ToLower(m.now.Format("Mon 2 Jan.")) + " " + m.now.Format("15:04") // from Phase 31
+	topEdge := getBorderStyle(m.theme).Render(labeledTopEdge(lipgloss.RoundedBorder(), dateAndTime, sidebarWidth))
+	box := sidebarStyle.Align(lipgloss.Center).Render(body)
 	return lipgloss.JoinVertical(lipgloss.Left, topEdge, box)
 }
 
@@ -165,9 +175,8 @@ func (m model) renderFrame(topContent, bottomExtra string) tea.View {
 		fullTopContent = lipgloss.JoinVertical(lipgloss.Left, fullTop, placed)
 	}
 	topRendered := finalPanelStyle.Render(fullTopContent)
-
+	sideBar := m.renderSidebar(lipgloss.Height(topRendered))
 	stackedColumn := lipgloss.JoinVertical(lipgloss.Left, topRendered, playingRendered)
-	sideBar := m.renderSideBar()
 
 	fullContent := lipgloss.JoinHorizontal(lipgloss.Top, sideBar, stackedColumn)
 	v := tea.NewView(fullContent)
@@ -240,7 +249,7 @@ func (m model) View() tea.View {
 }
 
 func (m model) idleView() tea.View {
-	header := m.defaultHeader()
+	header := labelYtbPlayer
 	label := getLabelStyle(m.theme).Render(labelEnterURL)
 	footerStyled := m.topPanelFooter(idleKeys)
 	title := getTitleStyle(m.theme).Render(header)
@@ -258,7 +267,7 @@ func (m model) idleView() tea.View {
 }
 
 func (m model) errorView() tea.View {
-	header := m.defaultHeader()
+	header := labelYtbPlayer
 	label := getLabelStyle(m.theme).Render(labelEnterURL)
 	footerStyled := m.topPanelFooter(idleKeys)
 	textInputView := m.textInput.View()
@@ -277,7 +286,7 @@ func (m model) errorView() tea.View {
 }
 
 func (m model) stoppedView() tea.View {
-	header := m.defaultHeader()
+	header := labelYtbPlayer
 	playAnother := ""
 	if m.err == nil {
 		playAnother = getLabelStyle(m.theme).Render(labelPlayAnother)
@@ -324,7 +333,7 @@ func (m model) playingView() tea.View {
 		return m.renderFrame(content, "")
 	}
 
-	header := m.defaultHeader()
+	header := labelYtbPlayer
 	audioInfo := ""
 	if m.metadata.Title != "" {
 		audioInfo = m.metadata.Title
@@ -339,7 +348,7 @@ func (m model) playingView() tea.View {
 }
 
 func (m model) loadingView() tea.View {
-	header := m.defaultHeader()
+	header := labelYtbPlayer
 	title := getTitleStyle(m.theme).Render(header)
 	loadingLabel := getLabelStyle(m.theme).Render(labelLoading)
 	content := lipgloss.JoinVertical(lipgloss.Top, title, loadingLabel)
@@ -368,7 +377,7 @@ func (m model) inputRowOffset(panel lipgloss.Style, header string, others ...str
 func (m model) inputColumnBounds(panel lipgloss.Style) (minX, maxX int) {
 	minX = panel.GetPaddingLeft() + panel.GetBorderLeftSize()
 	if !m.minimal {
-		minX += lipgloss.Width(m.renderSideBar())
+		minX += lipgloss.Width(m.renderSidebar(0))
 	}
 	maxX = minX + m.textInput.Width()
 	return minX, maxX
@@ -386,5 +395,3 @@ func (m model) setCursor(header string, panel lipgloss.Style, others ...string) 
 	}
 	return c
 }
-
-func (m model) defaultHeader() string { return "Youtube audio player" }

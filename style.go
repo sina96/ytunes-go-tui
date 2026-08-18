@@ -57,8 +57,8 @@ func panelHeightFor(termHeight int) int {
 }
 
 func sidebarStyleFor(termHeight int, theme Theme) lipgloss.Style {
-	h := panelHeightFor(termHeight)
-	return lipgloss.NewStyle().Width(26).Height(h).
+	h := panelHeightFor(termHeight) - 1 // -1: compensates for the topEdge row
+	return lipgloss.NewStyle().Width(sidebarWidth).Height(h).
 		Border(lipgloss.RoundedBorder(), false, true, true, true).
 		BorderForeground(theme.Border).Padding(1, 1)
 }
