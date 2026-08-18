@@ -35,7 +35,7 @@ func initialModel(minimal bool) model {
 	loadingSpinner := spinner.New(spinner.WithSpinner(spinner.Dot))
 	playingSpinner := spinner.New(spinner.WithSpinner(spinner.Pulse))
 
-	progress := progress.New(getProgressBarOptions(ThemeDefault)...)
+	progress := progress.New(getProgressBarOptions()...)
 
 	tabs := []string{}
 	tabs = append(tabs, "ytb-play")

@@ -54,8 +54,14 @@ type queueModeHideMsg struct {
 	shownAt time.Time
 }
 
-func tickPosition(gen int) tea.Cmd {
-	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+// playbackStartPollInterval is how often we poll mpv's real position while
+// waiting for actual playback to start (buffering/extraction can take a
+// few seconds after Play() returns) — faster than the normal 1s cadence
+// so the bar starts close to on-time instead of visibly lagging.
+const playbackStartPollInterval = 250 * time.Millisecond
+
+func tickPosition(gen int, interval time.Duration) tea.Cmd {
+	return tea.Tick(interval, func(t time.Time) tea.Msg {
 		return positionTickMsg{seq: gen}
 	})
 }
@@ -141,13 +147,19 @@ func (m model) handlePositionTickMsg(msg positionTickMsg) (model, tea.Cmd) {
 	if m.state != StatePlaying || m.player.IsPaused() || m.pausePending {
 		return m, nil
 	}
+
+	if m.awaitingPlaybackStart {
+		m.positionSeq++
+		return m, tea.Batch(tickPosition(m.tickGen, playbackStartPollInterval), queryPosition(m, m.positionSeq))
+	}
+
 	m.elapsedSeconds++
 	var pcmd tea.Cmd
 	if m.metadata.DurationSeconds > 0 {
 		pcmd = m.progress.SetPercent(m.elapsedSeconds / float64(m.metadata.DurationSeconds))
 	}
 	m.positionSeq++
-	return m, tea.Batch(pcmd, tickPosition(m.tickGen), queryPosition(m, m.positionSeq))
+	return m, tea.Batch(pcmd, tickPosition(m.tickGen, time.Second), queryPosition(m, m.positionSeq))
 }
 
 func (m model) handleMetadataFetchedMsg(msg metadataFetchedMsg) (model, tea.Cmd) {
@@ -168,11 +180,13 @@ func (m model) handleMetadataFetchedMsg(msg metadataFetchedMsg) (model, tea.Cmd)
 	}
 	m.metadata = msg.metadata
 	m.state = StatePlaying
+	m.awaitingPlaybackStart = true
+	m.elapsedSeconds = 0
 	m.tickGen++
 	m.playGen++
 	gen := m.tickGen
 	playGen := m.playGen
-	return m, tea.Batch(m.playingSpinner.Tick, tickPosition(gen), tickVisualizer(),
+	return m, tea.Batch(m.playingSpinner.Tick, tickPosition(gen, playbackStartPollInterval), tickVisualizer(),
 		func() tea.Msg {
 			err := m.player.Wait()
 			if err != nil {
@@ -210,7 +224,7 @@ func (m model) handleKeyPress(msg tea.KeyPressMsg) (model, tea.Cmd) {
 		if key == "enter" {
 			selected := Themes[m.themeList.Index()]
 			m.theme = selected.Theme
-			m.progress = progress.New(getProgressBarOptions(m.theme)...)
+			m.progress = progress.New(getProgressBarOptions()...)
 			m.pickingTheme = false
 			return m, func() tea.Msg {
 				err := saveTheme(selected.Name)
@@ -409,11 +423,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handlePositionTickMsg(msg)
 
 	case positionMsg:
-		if msg.seq != m.positionSeq || msg.err != nil {
+		if msg.seq != m.positionSeq {
 			return m, nil // stale
 		}
 		if m.state != StatePlaying || m.player.IsPaused() || m.pausePending {
 			return m, nil // paused
+		}
+		if m.awaitingPlaybackStart {
+			if msg.err != nil {
+				return m, nil // mpv hasn't loaded the file yet, keep polling
+			}
+			m.awaitingPlaybackStart = false
+		} else if msg.err != nil {
+			return m, nil // stale/transient IPC error
 		}
 		m.elapsedSeconds = msg.seconds
 		var pcmd tea.Cmd
@@ -430,7 +452,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == StatePlaying && !m.player.IsPaused() {
 			m.tickGen++
 			m.positionSeq++
-			return m, tea.Batch(tickPosition(m.tickGen), queryPosition(m, m.positionSeq), m.playingSpinner.Tick)
+			m.awaitingPlaybackStart = true // resume has the same async gap as initial buffering — poll fast, don't tick optimistically
+			return m, tea.Batch(tickPosition(m.tickGen, playbackStartPollInterval), queryPosition(m, m.positionSeq), m.playingSpinner.Tick)
 		}
 		return m, nil
 

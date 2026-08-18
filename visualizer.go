@@ -13,7 +13,7 @@ const (
 	visualizerBarPool        = 24 // generously more than any realistic terminal width needs
 	visualizerRows           = 4  // how tall the bars render, in text rows
 	visualizerTickEvery      = 100 * time.Millisecond
-	visualizerRetargetChance = 0.15 // per bar, per tick — independent, so bars desync naturally
+	visualizerRetargetChance = 0.15 // per bar, per tick
 )
 
 type visualizerTickMsg struct{}
@@ -32,9 +32,7 @@ func renderVisualizer(bars []visualizerBar, width int, theme Theme) string {
 	barCount := max(5, min(width/2, visualizerBarPool))
 	visible := bars[:barCount]
 
-	// bottom row (quiet) -> theme.Muted, top row (loud) -> theme.Peak,
-	// theme.Accent in between — a real per-row gradient instead of a
-	// hard two-color cutoff
+	// bottom row (quiet) -> theme.Muted, theme.Accent in between, top row (loud) -> theme.Peak
 	gradient := lipgloss.Blend1D(visualizerRows, theme.Muted, theme.Accent, theme.Peak)
 
 	rows := make([]string, visualizerRows)

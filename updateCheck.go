@@ -9,10 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-const timoutSec = 3 * time.Second
-
 type updateCheckMsg struct {
-	tag string // empty if the request/parse failed — Update doesn't need to know why
+	tag string // empty if  failed
 }
 
 type githubRelease struct {
@@ -27,7 +25,7 @@ func checkForUpdate() tea.Cmd {
 		}
 		req.Header.Set("User-Agent", "ytunes")
 
-		client := http.Client{Timeout: timoutSec}
+		client := http.Client{Timeout: 3 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
 			return updateCheckMsg{}

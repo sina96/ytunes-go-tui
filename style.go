@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"strings"
 
 	"charm.land/bubbles/v2/progress"
@@ -44,12 +45,37 @@ func centerTextStyle(width int) lipgloss.Style {
 	return lipgloss.NewStyle().Width(width).Align(lipgloss.Center)
 }
 
-func getProgressBarOptions(theme Theme) []progress.Option {
+func getProgressBarOptions() []progress.Option {
 	return []progress.Option{
-		progress.WithColors(theme.Muted, theme.Accent, theme.Peak),
-		progress.WithScaled(true), // gradient scales to fill, not full width
-		progress.WithoutPercentage(),
+		progress.WithSpringOptions(18.0, 1.0), // frequency, damping — tune fill snappiness
 	}
+}
+
+// renderProgressBar draws a "[=======>---]" style bar
+func renderProgressBar(p progress.Model, theme Theme, width int) string {
+	innerWidth := width - 2 // reserve for the [ and ] brackets
+	if innerWidth < 1 {
+		return strings.Repeat("=", max(width, 0))
+	}
+
+	percent := p.Percent()
+	filled := int(math.Round(float64(innerWidth) * percent))
+	filled = max(0, min(innerWidth, filled))
+
+	blend := lipgloss.Blend1D(max(filled, 1), theme.Muted, theme.Accent, theme.Peak)
+
+	var b strings.Builder
+	b.WriteString("[")
+	for i := 0; i < filled; i++ {
+		char := "="
+		if i == filled-1 && filled < innerWidth {
+			char = ">"
+		}
+		b.WriteString(lipgloss.NewStyle().Foreground(blend[i]).Render(char))
+	}
+	b.WriteString(strings.Repeat("-", innerWidth-filled))
+	b.WriteString("]")
+	return b.String()
 }
 
 func panelHeightFor(termHeight int) int {
@@ -71,7 +97,6 @@ func topPanelStyleFor(remainingHeight, availableWidth int, theme Theme) lipgloss
 func playingPanelStyleFor(availableWidth int, theme Theme) lipgloss.Style {
 	return lipgloss.NewStyle().Width(max(availableWidth, 65)).
 		Border(lipgloss.RoundedBorder()).BorderForeground(theme.Border).Padding(1, 1)
-	// no Height() — naturally small, bottom, fixed
 }
 
 func minimalBoxStyleFor(width, height int, theme Theme) lipgloss.Style {

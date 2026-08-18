@@ -2,6 +2,7 @@ package player
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -70,20 +71,6 @@ type ipcReply struct {
 	RequestID int             `json:"request_id"`
 }
 
-func (p *mpvPlayer) killStartedProcess() {
-	if p.cmd != nil && p.cmd.Process != nil {
-		if err := syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL); err != nil {
-			_ = p.cmd.Process.Kill()
-		}
-		_ = p.cmd.Wait()
-	}
-	if p.ipcPath != "" {
-		_ = os.Remove(p.ipcPath)
-	}
-	p.cmd = nil
-	p.ipcPath = ""
-}
-
 func (p *mpvPlayer) sendIPC(command []any) (json.RawMessage, error) {
 	if p.ipcConn == nil {
 		return nil, fmt.Errorf("mpv ipc: not connected")
@@ -108,20 +95,25 @@ func (p *mpvPlayer) sendIPC(command []any) (json.RawMessage, error) {
 		return nil, fmt.Errorf("failed to send IPC command: %w", err)
 	}
 
-	line, err := p.ipcReader.ReadString('\n')
-	if err != nil {
-		return nil, err
-	}
+	//skip anything that isn't the reply to this specific request
+	for {
+		line, err := p.ipcReader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
 
-	var reply ipcReply
-	if err := json.Unmarshal([]byte(line), &reply); err != nil {
-		return nil, err
+		var reply ipcReply
+		if err := json.Unmarshal([]byte(line), &reply); err != nil {
+			continue // malformed line, keep reading
+		}
+		if reply.RequestID != id {
+			continue // an event, or a stale reply to an older request
+		}
+		if reply.Error != "success" {
+			return nil, fmt.Errorf("mpv ipc error: %s", reply.Error)
+		}
+		return reply.Data, nil
 	}
-	if reply.Error != "success" {
-		return nil, fmt.Errorf("mpv ipc error: %s", reply.Error)
-	}
-	return reply.Data, nil
-
 }
 
 func newSocketPath() string {
@@ -159,9 +151,29 @@ func connectIPC(path string) (net.Conn, error) {
 			return conn, nil
 		}
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("failed to connect to IPC socket: %w", err)
+			return nil, fmt.Errorf("couldn't connect to mpv, try again")
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// friendlyYtdlpError turns yt-dlp's stderr into a short msg
+func friendlyYtdlpError(stderr string) string {
+	switch {
+	case strings.Contains(stderr, "Sign in to confirm"):
+		return "yt thinks you are a bot :( try again later or from a diff network"
+	case strings.Contains(stderr, "Private video"):
+		return "this video is private"
+	case strings.Contains(stderr, "Video unavailable"):
+		return "this video isn't available (removed, region-locked, or age-restricted)"
+	case strings.Contains(stderr, "Unsupported URL"):
+		return "that doesn't look like a supported YouTube URL"
+	default:
+		trimmed := strings.TrimSpace(stderr)
+		if trimmed == "" {
+			return "yt-dlp failed for an unknown reason"
+		}
+		return trimmed
 	}
 }
 
@@ -171,9 +183,11 @@ func fetchMetadata(url string) (Metadata, error) {
 		return Metadata{}, fmt.Errorf("yt-dlp not found. Please install it and try again")
 	}
 	cmd := exec.Command(ytbdlpPath, "--no-playlist", "--print", "title,duration", url)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	stdout, err := cmd.Output()
 	if err != nil {
-		return Metadata{}, err
+		return Metadata{}, fmt.Errorf("%s", friendlyYtdlpError(stderr.String()))
 	}
 	lines := strings.Split(string(stdout), "\n")
 	if len(lines) < 2 {
@@ -204,9 +218,11 @@ func (p *mpvPlayer) ResolveQueue(url string) ([]QueueEntry, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, ytbdlpPath, "--flat-playlist", "--dump-single-json", url)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	stdout, err := cmd.Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s", friendlyYtdlpError(stderr.String()))
 	}
 	var result flatPlaylistResult
 	if err := json.Unmarshal(stdout, &result); err != nil {
@@ -251,8 +267,7 @@ func (p *mpvPlayer) Play(url string, index int, queue []QueueEntry) (Metadata, e
 
 	conn, err := connectIPC(ipcPath) // IPC connect,  no lock held
 	if err != nil {
-		// playCmd already started — kill it directly here since
-		// p.killStartedProcess() likely reads p.cmd, which isn't set yet
+		// playCmd already started
 		_ = playCmd.Process.Kill()
 		return Metadata{}, err
 	}

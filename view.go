@@ -63,7 +63,7 @@ func (m model) renderPlayingPanel() string {
 	}
 
 	if m.err != nil {
-		return centerTextStyle(width).Render(getErrorStyle(m.theme).Render(fmt.Sprintf("We had some trouble: %v. Please try again.", m.err)))
+		return centerTextStyle(width).Render(getErrorStyle(m.theme).Render(fmt.Sprintf("We had some trouble: %v", m.err)))
 	}
 
 	switch m.state {
@@ -81,7 +81,8 @@ func (m model) renderPlayingPanel() string {
 		}
 
 		m.progress.SetWidth(width)
-		progressBarView := m.progress.View()
+		// progressBarView := m.progress.View() // old bracket-less block-fill rendering
+		progressBarView := renderProgressBar(m.progress, m.theme, width)
 
 		titleLine := ""
 		if m.minimal && m.metadata.Title != "" {
