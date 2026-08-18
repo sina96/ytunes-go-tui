@@ -63,6 +63,7 @@ type model struct {
 	sidebarImage       string
 	sidebarImageWidth  int
 	sidebarImageHeight int
+	latestVersion      string
 }
 
 func newTextInput() textinput.Model {

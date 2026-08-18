@@ -292,21 +292,19 @@ func (m model) handleKeyPress(msg tea.KeyPressMsg) (model, tea.Cmd) {
 		}
 		return m, nil
 	case "right", "l":
-		if m.state == StatePlaying {
+		if m.state == StatePlaying && m.playlistMode {
 			if m.queueIndex+1 < len(m.queue) {
 				return m.playQueueEntry(m.queueIndex + 1)
 			}
 			return m, nil
 		}
-		return m, nil
 	case "left", "h":
-		if m.state == StatePlaying {
+		if m.state == StatePlaying && m.playlistMode {
 			if m.queueIndex > 0 {
 				return m.playQueueEntry(m.queueIndex - 1)
 			}
 			return m, nil
 		}
-		return m, nil
 	case "esc":
 		m.confirmQuitting = false
 		if m.state == StatePlaying {
@@ -359,13 +357,19 @@ func (m model) handleWindowSizeMsg(msg tea.WindowSizeMsg) (model, tea.Cmd) {
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, tickClock())
+	return tea.Batch(textinput.Blink, tickClock(), checkForUpdate())
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+
+	case updateCheckMsg:
+		if msg.tag != "" && msg.tag != appVersion {
+			m.latestVersion = msg.tag
+			return m, nil
+		}
 
 	case tea.WindowSizeMsg:
 		return m.handleWindowSizeMsg(msg)

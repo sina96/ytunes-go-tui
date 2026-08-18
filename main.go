@@ -69,7 +69,20 @@ func initialModel(minimal bool) model {
 
 func main() {
 	minimal := flag.Bool("minimal", false, "hide some features")
+	version := flag.Bool("version", false, "print version and exit")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "ytunes — a retro-terminal YouTube audio player\n\n")
+		fmt.Fprintf(os.Stderr, "Usage:\n  ytunes [flags]\n\n")
+		fmt.Fprintf(os.Stderr, "Flags:\n")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
+
+	if *version {
+		fmt.Println(appVersion)
+		os.Exit(0)
+	}
+
 	p := tea.NewProgram(initialModel(*minimal))
 	if _, err := p.Run(); err != nil {
 		fmt.Println(err)

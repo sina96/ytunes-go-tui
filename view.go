@@ -104,7 +104,12 @@ func (m model) renderPlayingPanel() string {
 		}
 		return centerTextStyle(width).Render(lipgloss.JoinVertical(lipgloss.Center, stoppedLabel, confirmQuitLabelForCompact))
 	case StateIdle:
-		return centerTextStyle(width).Render(lipgloss.JoinVertical(lipgloss.Center, getMutedLabelStyle(m.theme).Render(labelIdlePlaceholder), confirmQuitLabelForCompact))
+		updateNotice := ""
+		if m.latestVersion != "" {
+			updateNotice = getMutedLabelStyle(m.theme).Render("Update available: " + m.latestVersion)
+		}
+		return centerTextStyle(width).Render(lipgloss.JoinVertical(lipgloss.Center,
+			getMutedLabelStyle(m.theme).Render(labelIdlePlaceholder), updateNotice, confirmQuitLabelForCompact))
 	default:
 		return centerTextStyle(width).Render(lipgloss.JoinVertical(lipgloss.Center, getMutedLabelStyle(m.theme).Render(labelIdlePlaceholder), confirmQuitLabelForCompact))
 	}
@@ -193,7 +198,7 @@ func renderMinimalTopPanel(m model, content string) tea.View {
 		topLabel = topLabel + ":" + m.tabs[m.activeTab]
 	}
 
-	bottomLabel := "Playing panel"
+	bottomLabel := labelPlayingPanelMinimalTopBorder
 	if m.err != nil {
 		bottomLabel = "error mss"
 	}

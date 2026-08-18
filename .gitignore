@@ -3,6 +3,7 @@
 /ytunes
 *.exe
 *.test
+*.tape
 
 # OS cruft
 .DS_Store

@@ -1,6 +1,6 @@
 # Ytunes v.0.1.0
 
-![yTunes screenshot](assets/yTunes-aug26-screenshot.png)
+![ytunes demo](assets/demo.gif)
 
 [![Go Build](https://github.com/sina96/ytunes/actions/workflows/go.yml/badge.svg)](https://github.com/sina96/ytunes/actions/workflows/go.yml)
 [![License: MIT](https://img.shields.io/github/license/sina96/ytunes)](LICENSE)
