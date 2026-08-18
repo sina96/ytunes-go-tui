@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 )
+
+const timoutSec = 3 * time.Second
 
 type updateCheckMsg struct {
 	tag string // empty if the request/parse failed — Update doesn't need to know why
@@ -18,12 +21,22 @@ type githubRelease struct {
 
 func checkForUpdate() tea.Cmd {
 	return func() tea.Msg {
-		client := http.Client{Timeout: 3 * time.Second}
-		resp, err := client.Get(releaseAPIURL)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, releaseAPIURL, nil)
 		if err != nil {
-			return updateCheckMsg{} // silent failure — empty tag means "show nothing"
+			return updateCheckMsg{}
 		}
-		defer resp.Body.Close()
+		req.Header.Set("User-Agent", "ytunes")
+
+		client := http.Client{Timeout: timoutSec}
+		resp, err := client.Do(req)
+		if err != nil {
+			return updateCheckMsg{}
+		}
+		defer func() { _ = resp.Body.Close() }()
+
+		if resp.StatusCode != http.StatusOK {
+			return updateCheckMsg{}
+		}
 
 		var release githubRelease
 		if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {

@@ -1,4 +1,4 @@
-# Ytunes v.0.1.1
+# Ytunes v0.1.1
 
 ![ytunes demo](assets/demo.gif)
 

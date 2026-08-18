@@ -2,6 +2,7 @@ package player
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -18,6 +19,8 @@ import (
 )
 
 const ipcTimeout = 2 * time.Second
+
+const maxRadioQueueEntries = 50
 
 type Player interface {
 	Play(url string, index int, queue []QueueEntry) (Metadata, error)
@@ -69,7 +72,13 @@ type ipcReply struct {
 
 func (p *mpvPlayer) killStartedProcess() {
 	if p.cmd != nil && p.cmd.Process != nil {
-		p.cmd.Process.Kill()
+		if err := syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL); err != nil {
+			_ = p.cmd.Process.Kill()
+		}
+		_ = p.cmd.Wait()
+	}
+	if p.ipcPath != "" {
+		_ = os.Remove(p.ipcPath)
 	}
 	p.cmd = nil
 	p.ipcPath = ""
@@ -91,7 +100,9 @@ func (p *mpvPlayer) sendIPC(command []any) (json.RawMessage, error) {
 		return nil, fmt.Errorf("failed to marshal IPC command: %w", err)
 	}
 
-	p.ipcConn.SetDeadline(time.Now().Add(ipcTimeout))
+	if err := p.ipcConn.SetDeadline(time.Now().Add(ipcTimeout)); err != nil {
+		return nil, fmt.Errorf("failed to set IPC deadline: %w", err)
+	}
 
 	if _, err := p.ipcConn.Write(append(message, '\n')); err != nil {
 		return nil, fmt.Errorf("failed to send IPC command: %w", err)
@@ -141,7 +152,7 @@ func buildPlayCommand(url string, ipcPath string) (*exec.Cmd, string, error) {
 }
 
 func connectIPC(path string) (net.Conn, error) {
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(ipcTimeout)
 	for {
 		conn, err := net.Dial("unix", path)
 		if err == nil {
@@ -178,7 +189,7 @@ func fetchMetadata(url string) (Metadata, error) {
 }
 
 func fetchPlayUrlForQueue(url string, index int, queue []QueueEntry) string {
-	if len(queue) == 0 {
+	if len(queue) == 0 || index < 0 || index >= len(queue) {
 		return url
 	}
 	return "https://www.youtube.com/watch?v=" + queue[index].ID
@@ -189,7 +200,10 @@ func (p *mpvPlayer) ResolveQueue(url string) ([]QueueEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("yt-dlp not found. Please install it and try again")
 	}
-	cmd := exec.Command(ytbdlpPath, "--flat-playlist", "--dump-single-json", url)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, ytbdlpPath, "--flat-playlist", "--dump-single-json", url)
 	stdout, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -205,21 +219,20 @@ func (p *mpvPlayer) ResolveQueue(url string) ([]QueueEntry, error) {
 
 	entries := make([]QueueEntry, 0, len(result.Entries))
 	for _, entry := range result.Entries {
+		if entry.ID == "" {
+			continue
+		}
 		entries = append(entries, QueueEntry{ID: entry.ID, Title: entry.Title})
 	}
 	isRadio := strings.HasPrefix(result.ID, "RD")
-	if isRadio && len(entries) > 50 {
-		entries = entries[:50]
+	if isRadio && len(entries) > maxRadioQueueEntries {
+		entries = entries[:maxRadioQueueEntries]
 	}
 
 	return entries, nil
 }
 
 func (p *mpvPlayer) Play(url string, index int, queue []QueueEntry) (Metadata, error) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	p.paused = false
-
 	ipcPath := newSocketPath()
 	url = fetchPlayUrlForQueue(url, index, queue)
 	playCmd, url, err := buildPlayCommand(url, ipcPath)
@@ -232,21 +245,25 @@ func (p *mpvPlayer) Play(url string, index int, queue []QueueEntry) (Metadata, e
 		return Metadata{}, err
 	}
 
+	if err := playCmd.Start(); err != nil { // process start, no lock held
+		return Metadata{}, err
+	}
+
+	conn, err := connectIPC(ipcPath) // IPC connect,  no lock held
+	if err != nil {
+		// playCmd already started — kill it directly here since
+		// p.killStartedProcess() likely reads p.cmd, which isn't set yet
+		_ = playCmd.Process.Kill()
+		return Metadata{}, err
+	}
+
+	p.mutex.Lock()
+	p.paused = false
 	p.cmd = playCmd
 	p.ipcPath = ipcPath
-
-	err = p.cmd.Start()
-	if err != nil {
-		return Metadata{}, err
-	}
-
-	conn, err := connectIPC(ipcPath)
-	if err != nil {
-		p.killStartedProcess()
-		return Metadata{}, err
-	}
 	p.ipcConn = conn
 	p.ipcReader = bufio.NewReader(conn)
+	p.mutex.Unlock()
 
 	return meta, nil
 }

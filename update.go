@@ -67,9 +67,11 @@ func (m model) playQueueEntry(index int) (model, tea.Cmd) {
 	m.queueIndex = index
 	m.state = StateLoading
 	m.elapsedSeconds = 0
+	m.playGen++
+	m.tickGen++
 
 	return m, tea.Batch(m.loadingSpinner.Tick, m.progress.SetPercent(0), func() tea.Msg {
-		m.player.Stop()
+		_ = m.player.Stop()
 		meta, err := m.player.Play("", index, m.queue)
 		if err != nil {
 			return metadataFetchedMsg{err: err}
@@ -140,13 +142,19 @@ func (m model) handlePositionTickMsg(msg positionTickMsg) (model, tea.Cmd) {
 		return m, nil
 	}
 	m.elapsedSeconds++
-	pcmd := m.progress.SetPercent(m.elapsedSeconds / float64(m.metadata.DurationSeconds))
+	var pcmd tea.Cmd
+	if m.metadata.DurationSeconds > 0 {
+		pcmd = m.progress.SetPercent(m.elapsedSeconds / float64(m.metadata.DurationSeconds))
+	}
 	m.positionSeq++
 	return m, tea.Batch(pcmd, tickPosition(m.tickGen), queryPosition(m, m.positionSeq))
 }
 
 func (m model) handleMetadataFetchedMsg(msg metadataFetchedMsg) (model, tea.Cmd) {
 	var cmd tea.Cmd
+	if msg.queue != nil {
+		m.queue = msg.queue
+	}
 	if msg.err != nil {
 		if m.queue != nil {
 			if m.queueIndex+1 < len(m.queue) {
@@ -159,7 +167,6 @@ func (m model) handleMetadataFetchedMsg(msg metadataFetchedMsg) (model, tea.Cmd)
 		return m, cmd
 	}
 	m.metadata = msg.metadata
-	m.queue = msg.queue
 	m.state = StatePlaying
 	m.tickGen++
 	m.playGen++
@@ -264,7 +271,9 @@ func (m model) handleKeyPress(msg tea.KeyPressMsg) (model, tea.Cmd) {
 
 		if m.confirmQuitting {
 			if m.state == StatePlaying {
-				m.player.Stop()
+				if err := m.player.Stop(); err != nil {
+					m.err = err
+				}
 			}
 			return m, tea.Quit
 		}
@@ -308,7 +317,9 @@ func (m model) handleKeyPress(msg tea.KeyPressMsg) (model, tea.Cmd) {
 	case "esc":
 		m.confirmQuitting = false
 		if m.state == StatePlaying {
-			m.player.Stop()
+			if err := m.player.Stop(); err != nil {
+				m.err = err
+			}
 			m.userStopped = true
 		}
 		return m, nil
@@ -405,7 +416,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil // paused
 		}
 		m.elapsedSeconds = msg.seconds
-		return m, m.progress.SetPercent(msg.seconds / float64(m.metadata.DurationSeconds))
+		var pcmd tea.Cmd
+		if m.metadata.DurationSeconds > 0 {
+			pcmd = m.progress.SetPercent(msg.seconds / float64(m.metadata.DurationSeconds))
+		}
+		return m, pcmd
 
 	case pauseToggleMsg:
 		m.pausePending = false

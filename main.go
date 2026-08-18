@@ -28,6 +28,9 @@ func tickClock() tea.Cmd {
 func initialModel(minimal bool) model {
 	ti := newTextInput()
 
+	themeList := newThemeList(0, 0, "Pick a theme")
+	theme := loadSavedTheme()
+
 	player := player.New()
 	loadingSpinner := spinner.New(spinner.WithSpinner(spinner.Dot))
 	playingSpinner := spinner.New(spinner.WithSpinner(spinner.Pulse))
@@ -38,9 +41,6 @@ func initialModel(minimal bool) model {
 	tabs = append(tabs, "ytb-play")
 
 	help := help.New()
-
-	themeList := newThemeList(0, 0, "Pick a theme")
-	theme := loadSavedTheme()
 
 	visualizerBars := newVisualizerBars()
 	visualizerSpring := harmonica.NewSpring(harmonica.FPS(10), 6.0, 1.0) //angularFrequency/dampingRatio

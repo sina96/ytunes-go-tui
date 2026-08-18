@@ -57,18 +57,20 @@ func (m model) topPanelFooter(keymap help.KeyMap) string {
 func (m model) renderPlayingPanel() string {
 	width := getContentWidth(playingPanelStyleFor(m.availableMainWidth(), m.theme))
 
-	if m.err != nil {
-		return centerTextStyle(width).Render(getErrorStyle(m.theme).Render(fmt.Sprintf("We had some trouble: %v. Please try again.", m.err)))
-	}
-
 	confirmQuitLabelForCompact := ""
 	if m.confirmQuitting && m.minimal {
 		confirmQuitLabelForCompact = getMutedLabelStyle(m.theme).Render(labelConfirmQuit)
 	}
 
+	if m.err != nil {
+		return centerTextStyle(width).Render(getErrorStyle(m.theme).Render(fmt.Sprintf("We had some trouble: %v. Please try again.", m.err)))
+	}
+
 	switch m.state {
 	case StateLoading:
-		return centerTextStyle(width).Render(m.loadingSpinner.View())
+		return centerTextStyle(width).Render(lipgloss.JoinVertical(
+			lipgloss.Center, m.loadingSpinner.View(), confirmQuitLabelForCompact,
+		))
 	case StatePlaying:
 		durationInfo := ""
 		if m.metadata.Duration != "" {
@@ -200,7 +202,7 @@ func renderMinimalTopPanel(m model, content string) tea.View {
 
 	bottomLabel := labelPlayingPanelMinimalTopBorder
 	if m.err != nil {
-		bottomLabel = "error mss"
+		bottomLabel = labelErrorPanelMinimalTopBorder
 	}
 	bottomContent := m.renderPlayingPanel()
 

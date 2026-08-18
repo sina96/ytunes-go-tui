@@ -24,4 +24,5 @@ const (
 	labelLoading                      = "\nLoading..."
 	labelYtbPlayer                    = "Youtube audio player"
 	labelPlayingPanelMinimalTopBorder = "Now Playing"
+	labelErrorPanelMinimalTopBorder   = "Error"
 )
