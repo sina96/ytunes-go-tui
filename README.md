@@ -1,4 +1,4 @@
-# Ytunes v.0.1.0
+# Ytunes v.0.1.1
 
 ![ytunes demo](assets/demo.gif)
 
@@ -11,7 +11,7 @@ May you never leave your terminal again!
 
 ## About
 
-`yTunes` plays audio from a YouTube URL, for now , in your terminal. Paste
+`yTunes` plays audio from a YouTube URL (for now), in your terminal. Paste
 a link, hit enter, and it plays through [mpv](https://mpv.io) with a
 retro-styled Bubble Tea interface: transport controls, a live progress
 bar, and a handful of built-in themes. 
@@ -60,7 +60,7 @@ go build -o ytunes .
 
 ## Usage
 
-Flags: `--minimal` runs a compact, sidebar-free layout.
+Flags: `--minimal` runs a compact, sidebar-free layout. but check the `--help` flag for more options.
 
 Enjoy it with your theme choice! [dracula](https://github.com/dracula/dracula-theme), [gruvbox](https://github.com/morhetz/gruvbox), [Catppuccin](https://catppuccin.com/palette/) are included!
 
@@ -79,8 +79,7 @@ Enjoy it with your theme choice! [dracula](https://github.com/dracula/dracula-th
 
 ### Upcoming features
 - Bug fixes.
-- Theme persistency.
-- Better compact version
-- Pixelated art?
+- Better compact version in IDEs
+- more pixelated art.
 - Youtube-dl support
 - Soundcloud or spotify or local file play.

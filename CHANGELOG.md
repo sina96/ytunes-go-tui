@@ -4,6 +4,24 @@ One-liner summary of the biggest thing each development phase added.
 
 ## v0.1.1 (latest)
 
+- `--help`/`-h` now prints a proper usage message instead of Go's bare
+  default; `--version` prints the current version and exits.
+- Startup update-check: a silent, one-time GitHub-releases lookup shown
+  as a small notice on the idle screen when a newer version exists.
+- `--minimal` mode redesigned with named/labeled panel borders
+  (`lipgloss`-drawn, title spliced into the border itself).
+- Sidebar's top border now doubles as a live clock + date label
+  (`tue 18 aug. 01:23`), full mode only.
+- A static mosaic image (Unicode block-character rendering, via
+  `charmbracelet/x/mosaic`) now appears at the bottom of the sidebar
+  while a track is playing.
+- Retro decorative visualizer bars while a track is playing.
+- Fixed a real input bug: typing a URL containing a lowercase `h` or
+  `l` could silently drop that character, because the queue Next/Prev
+  keybindings intercepted it even outside playback/queue mode.
+- General polish pass: consistent panel padding, a unified progress-bar
+  gradient, and layout fixes removing dead space in both full and
+  minimal modes.
 - Playlist & radio support: paste a playlist/radio URL with "Queue
   Mode" on (`ctrl+q`, off by default) to build a queue with Next/Prev
   and auto-advance; a track that fails to play is skipped instead of
