@@ -3,6 +3,7 @@
 ![ytunes demo](assets/demo.gif)
 
 [![Go Build](https://github.com/sina96/ytunes/actions/workflows/go.yml/badge.svg)](https://github.com/sina96/ytunes/actions/workflows/go.yml)
+[![Release](https://github.com/sina96/ytunes/actions/workflows/release.yml/badge.svg)](https://github.com/sina96/ytunes/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/github/license/sina96/ytunes)](LICENSE)
 
 A TUI audio player built in Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea/tree/main). 
