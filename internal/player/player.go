@@ -182,7 +182,9 @@ func fetchMetadata(url string) (Metadata, error) {
 	if err != nil {
 		return Metadata{}, fmt.Errorf("yt-dlp not found. Please install it and try again")
 	}
-	cmd := exec.Command(ytbdlpPath, "--no-playlist", "--print", "title,duration", url)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, ytbdlpPath, "--no-playlist", "--print", "title,duration", url)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	stdout, err := cmd.Output()

@@ -30,6 +30,12 @@ func initialModel(minimal bool) model {
 
 	themeList := newThemeList(0, 0, "Pick a theme")
 	theme := loadSavedTheme()
+	for i, t := range Themes {
+		if t.Theme == theme {
+			themeList.Select(i)
+			break
+		}
+	}
 
 	player := player.New()
 	loadingSpinner := spinner.New(spinner.WithSpinner(spinner.Dot))

@@ -18,9 +18,10 @@ import (
 )
 
 type metadataFetchedMsg struct {
-	metadata player.Metadata
-	queue    []player.QueueEntry
-	err      error
+	metadata         player.Metadata
+	queue            []player.QueueEntry
+	err              error
+	isNewPlayRequest bool // true for a fresh "enter" URL, false for playQueueEntry navigation — must replace m.queue even with nil
 }
 type playbackFinishedMsg struct {
 	err error
@@ -54,11 +55,7 @@ type queueModeHideMsg struct {
 	shownAt time.Time
 }
 
-// playbackStartPollInterval is how often we poll mpv's real position while
-// waiting for actual playback to start (buffering/extraction can take a
-// few seconds after Play() returns) — faster than the normal 1s cadence
-// so the bar starts close to on-time instead of visibly lagging.
-const playbackStartPollInterval = 250 * time.Millisecond
+const playbackStartPollInterval = 250 * time.Millisecond // fast poll while waiting for real playback to start, vs. the normal 1s cadence
 
 func tickPosition(gen int, interval time.Duration) tea.Cmd {
 	return tea.Tick(interval, func(t time.Time) tea.Msg {
@@ -164,7 +161,10 @@ func (m model) handlePositionTickMsg(msg positionTickMsg) (model, tea.Cmd) {
 
 func (m model) handleMetadataFetchedMsg(msg metadataFetchedMsg) (model, tea.Cmd) {
 	var cmd tea.Cmd
-	if msg.queue != nil {
+	if msg.isNewPlayRequest {
+		m.queue = msg.queue // even nil — a fresh direct URL replaces any leftover playlist queue
+		m.queueIndex = 0
+	} else if msg.queue != nil {
 		m.queue = msg.queue
 	}
 	if msg.err != nil {
@@ -245,7 +245,7 @@ func (m model) handleKeyPress(msg tea.KeyPressMsg) (model, tea.Cmd) {
 		//playing logic
 		m.confirmQuitting = false
 		m.err = nil
-		if m.state == StatePlaying {
+		if m.state == StatePlaying || m.state == StateLoading {
 			return m, nil
 		}
 
@@ -262,15 +262,15 @@ func (m model) handleKeyPress(msg tea.KeyPressMsg) (model, tea.Cmd) {
 			if m.playlistMode {
 				queue, err = m.player.ResolveQueue(url)
 				if err != nil {
-					return metadataFetchedMsg{err: err}
+					return metadataFetchedMsg{err: err, isNewPlayRequest: true}
 				}
 			}
 
 			meta, err := m.player.Play(url, 0, queue)
 			if err != nil {
-				return metadataFetchedMsg{err: err}
+				return metadataFetchedMsg{err: err, isNewPlayRequest: true}
 			}
-			return metadataFetchedMsg{metadata: meta, queue: queue}
+			return metadataFetchedMsg{metadata: meta, queue: queue, isNewPlayRequest: true}
 		})
 	case "ctrl+v", "ctrl+p":
 		m.confirmQuitting = false
