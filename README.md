@@ -29,6 +29,19 @@ This started as (and still is) a hands-on Go learning project. I also submitted 
 `PATH` — `ytunes` shells out to both rather than bundling them (mpv and
 yt-dlp are their own, separately licensed projects).
 
+**Prebuilt binary (no Go required):** grab the `.tar.gz` for your
+platform from the [latest release](https://github.com/sina96/ytunes/releases/latest)
+(linux/darwin, amd64/arm64), then:
+
+```sh
+brew install mpv yt-dlp   # macOS — or your system's package manager
+tar -xzf ytunes_<os>_<arch>.tar.gz
+./ytunes
+```
+
+Move the extracted `ytunes` binary somewhere on your `PATH` (e.g.
+`/usr/local/bin`) if you want to run it as just `ytunes` from anywhere.
+
 **Already have Go?**
 
 ```sh
@@ -58,6 +71,29 @@ go build -o ytunes .
 ./ytunes
 ```
 
+## Updating
+
+`ytunes` checks GitHub for a newer release on startup and shows a small
+notice on the idle screen if one exists — it never downloads or
+installs anything automatically. Run `ytunes --version` any time to see
+what you currently have.
+
+To actually update, use whichever method matches how you installed it:
+
+```sh
+# Prebuilt binary: download the new release and replace the old binary
+# https://github.com/sina96/ytunes/releases/latest
+
+# go install
+go install github.com/sina96/ytunes@latest
+
+# local clone
+git pull && go build -o ytunes .
+
+# install.sh
+git pull && ./install.sh
+```
+
 ## Usage
 
 Flags: `--minimal` runs a compact, sidebar-free layout. but check the `--help` flag for more options.
@@ -65,9 +101,9 @@ Flags: `--minimal` runs a compact, sidebar-free layout. but check the `--help` f
 Enjoy it with your theme choice! [dracula](https://github.com/dracula/dracula-theme), [gruvbox](https://github.com/morhetz/gruvbox), [Catppuccin](https://catppuccin.com/palette/) are included!
 
 ### Known Issues
-- **First pause Latency** — the first time you pause, there may be a noticeable delay before the pause is registered. Timer acts weird. as i said i got help from ai for ipc and i am not proud of it
-- **Windows Support** —  Not supported yet. Sorry
-- **Some videos fail to play** — YouTube's current anti-bot/PO-Token enforcement blocks some videos for `yt-dlp`/`mpv` entirely; this is upstream of `ytunes` and not something it can fix directly (see [yt-dlp's PO Token Guide](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide)).
+- **First pause/play Latency**: the first time you pause, there may be a noticeable delay before the pause is registered. Timer acts weird. Progressbar too. I need to work on this and see how we can make it smoother.
+- **Windows Support**: Not supported yet. Sorry
+- **Some videos fail to play**: YouTube's current anti-bot/PO-Token enforcement blocks some videos for `yt-dlp`/`mpv` entirely; this is upstream of `ytunes` and not something it can fix directly (see [yt-dlp's PO Token Guide](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide)).
 
 ## Contributing
 
@@ -78,8 +114,7 @@ Enjoy it with your theme choice! [dracula](https://github.com/dracula/dracula-th
 - **[LICENSE](LICENSE)** — MIT.
 
 ### Upcoming features
-- Bug fixes.
 - Better compact version in IDEs
-- more pixelated art.
+- Better visuals.
 - Youtube-dl support
-- Soundcloud or spotify or local file play.
+- Soundcloud or spotify or local file play support.

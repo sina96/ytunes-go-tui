@@ -33,6 +33,9 @@ One-liner summary of the biggest thing each development phase added.
 - Terminal window/tab title now reflects live state (`y𝕋unes`,
   `y𝕋unes • Playing`, `y𝕋unes • Paused`).
 - Theme choice now persists across restarts (`~/.config/ytunes/theme`).
+- Release automation: tagging `vX.Y.Z` now builds and publishes
+  cross-platform binaries (linux/darwin, amd64/arm64) via GoReleaser
+  and GitHub Actions, no more manual per-platform builds.
 
 ## v0.1.0
 
