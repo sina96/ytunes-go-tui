@@ -97,12 +97,12 @@ git pull && ./install.sh
 
 ## Usage
 
-Flags: `--minimal` runs a compact, sidebar-free layout. but check the `--help` flag for more options.
+The `--minimal` flag runs a compact, sidebar-free layout. Run `ytunes --help` for more options.
 
 Enjoy it with your theme choice! [dracula](https://github.com/dracula/dracula-theme), [gruvbox](https://github.com/morhetz/gruvbox), [Catppuccin](https://catppuccin.com/palette/) are included!
 
 ### Known Issues
-- **First pause/play Latency**: the first time you pause, there may be a noticeable delay before the pause is registered. Timer acts weird. Progressbar too. I need to work on this and see how we can make it smoother.
+- **First pause/play Latency**: the first time you pause, there may be a noticeable delay before the pause is registered. Timer acts weird. Progress bar too. I need to work on this and see how we can make it smoother.
 - **Windows Support**: Not supported yet. Sorry
 - **Some videos fail to play**: YouTube's current anti-bot/PO-Token enforcement blocks some videos for `yt-dlp`/`mpv` entirely; this is upstream of `ytunes` and not something it can fix directly (see [yt-dlp's PO Token Guide](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide)).
 
@@ -117,5 +117,4 @@ Enjoy it with your theme choice! [dracula](https://github.com/dracula/dracula-th
 ### Upcoming features
 - Better compact version in IDEs
 - Better visuals.
-- Youtube-dl support
-- Soundcloud or spotify or local file play support.
+- Other vendors or local file play support.

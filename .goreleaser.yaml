@@ -4,7 +4,7 @@ project_name: ytunes
 
 before:
   hooks:
-    - go mod tidy
+    - go mod tidy -diff
 
 builds:
   - env:
@@ -29,8 +29,7 @@ changelog:
   disable: true
 
 release:
-  # CHANGELOG.md is hand-maintained (see RELEASE.md) and already has the
-  # per-version notes; reuse them as the GitHub release body instead of
-  # letting GoReleaser generate one from commit messages.
+  # Link to CHANGELOG.md as it existed at this tag, not at main's tip,
+  # so old releases keep pointing at the notes that were true then.
   header: |
-    See [CHANGELOG.md](https://github.com/sina96/ytunes/blob/main/CHANGELOG.md) for full notes.
+    See [CHANGELOG.md](https://github.com/sina96/ytunes/blob/{{ .Tag }}/CHANGELOG.md) for full notes.
