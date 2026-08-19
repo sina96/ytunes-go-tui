@@ -11,25 +11,43 @@ import (
 	utils "github.com/sina96/ytunes/internal/utils"
 )
 
+func (m model) windowTitle() string {
+	if m.state != StatePlaying {
+		return windowTitleBase
+	}
+	if m.player.IsPaused() {
+		return windowTitleBase + " • Paused"
+	}
+	return windowTitleBase + " • Playing"
+}
+
 func (m model) renderHints(keymap help.KeyMap) string {
-	return m.help.View(keymap)
+	hints := m.help.View(keymap)
+	if m.showQueueModeLabel {
+		hints += getMutedLabelStyle(m.theme).Render(queueModeLabel(m.playlistMode))
+	}
+	return hints
 }
 
 func (m model) confirmQuitLabel() string {
 	if !m.confirmQuitting {
 		return ""
 	}
-	return getMutedLabelStyle(m.theme).Render(labelConfirmQuit)
+	return getMutedLabelStyle(m.theme).Render("  " + labelConfirmQuit)
+}
+
+func queueModeLabel(on bool) string {
+	str := "(queue mode is now: "
+	if on {
+		return str + "ON)"
+	}
+	return str + "OFF)"
 }
 
 func (m model) topPanelFooter(keymap help.KeyMap) string {
 	hints := m.renderHints(keymap)
 	if m.minimal {
-		hints = ""
-		if m.confirmQuitting && m.state == StateIdle {
-			hints = hints + getMutedLabelStyle(m.theme).Render("\n"+labelConfirmQuit)
-		}
-		return hints
+		return ""
 	}
 
 	hints = hints + m.confirmQuitLabel()
@@ -37,30 +55,39 @@ func (m model) topPanelFooter(keymap help.KeyMap) string {
 }
 
 func (m model) renderPlayingPanel() string {
-	if m.err != nil {
-		return getErrorStyle(m.theme).Render(fmt.Sprintf("We had some trouble: %v. Please try again.", m.err))
-	}
+	width := getContentWidth(playingPanelStyleFor(m.availableMainWidth(), m.theme))
 
 	confirmQuitLabelForCompact := ""
 	if m.confirmQuitting && m.minimal {
 		confirmQuitLabelForCompact = getMutedLabelStyle(m.theme).Render(labelConfirmQuit)
 	}
 
+	if m.err != nil {
+		return centerTextStyle(width).Render(getErrorStyle(m.theme).Render(fmt.Sprintf("We had some trouble: %v", m.err)))
+	}
+
 	switch m.state {
 	case StateLoading:
-		return m.loadingSpinner.View()
+		return centerTextStyle(width).Render(lipgloss.JoinVertical(
+			lipgloss.Center, m.loadingSpinner.View(), confirmQuitLabelForCompact,
+		))
 	case StatePlaying:
 		durationInfo := ""
 		if m.metadata.Duration != "" {
 			elapsedSecs := min(int(m.elapsedSeconds), m.metadata.DurationSeconds)
 			elapsed := utils.FormatDuration(elapsedSecs)
-
 			total := utils.FormatDuration(m.metadata.DurationSeconds)
 			durationInfo = elapsed + " / " + total
 		}
 
-		m.progress.SetWidth(getContentWidth(playingPanelStyleFor(m.availableMainWidth(), m.theme)))
-		progressBarView := m.progress.View()
+		m.progress.SetWidth(width)
+		// progressBarView := m.progress.View() // old bracket-less block-fill rendering
+		progressBarView := renderProgressBar(m.progress, m.theme, width)
+
+		titleLine := ""
+		if m.minimal && m.metadata.Title != "" {
+			titleLine = getLabelStyle(m.theme).Render(utils.TruncateTitle(m.metadata.Title, width))
+		}
 
 		pauseplay := getMutedLabelStyle(m.theme).Render("▶⏸")
 		if m.pausePending {
@@ -70,24 +97,25 @@ func (m model) renderPlayingPanel() string {
 		shutdown := getMutedLabelStyle(m.theme).Render("⏻")
 		playerBtns := lipgloss.JoinHorizontal(lipgloss.Left, stop, "  ", pauseplay, "  ", shutdown)
 
-		return lipgloss.JoinVertical(lipgloss.Center, progressBarView, durationInfo, playerBtns, confirmQuitLabelForCompact)
+		return centerTextStyle(width).Render(lipgloss.JoinVertical(lipgloss.Center, progressBarView, titleLine, durationInfo, playerBtns, confirmQuitLabelForCompact))
 	case StateStopped:
 		stoppedLabel := ""
 		if m.metadata.Title != "" {
-			width := getContentWidth(playingPanelStyleFor(m.availableMainWidth(), m.theme))
 			stoppedLabel = getMutedLabelStyle(m.theme).Render(labelLastPlayedPrefix + utils.TruncateTitle(m.metadata.Title, width))
 		} else {
 			stoppedLabel = getMutedLabelStyle(m.theme).Render(labelIdlePlaceholder)
 		}
-		return lipgloss.JoinVertical(lipgloss.Center, stoppedLabel, confirmQuitLabelForCompact)
-
+		return centerTextStyle(width).Render(lipgloss.JoinVertical(lipgloss.Center, stoppedLabel, confirmQuitLabelForCompact))
 	case StateIdle:
-		return lipgloss.JoinVertical(lipgloss.Top, lipgloss.JoinHorizontal(lipgloss.Center, getMutedLabelStyle(m.theme).Render(labelIdlePlaceholder)))
+		updateNotice := ""
+		if m.latestVersion != "" {
+			updateNotice = getMutedLabelStyle(m.theme).Render("Update available: " + m.latestVersion)
+		}
+		return centerTextStyle(width).Render(lipgloss.JoinVertical(lipgloss.Center,
+			getMutedLabelStyle(m.theme).Render(labelIdlePlaceholder), updateNotice, confirmQuitLabelForCompact))
 	default:
-		return lipgloss.JoinVertical(lipgloss.Top, lipgloss.JoinHorizontal(lipgloss.Center, getMutedLabelStyle(m.theme).Render(labelIdlePlaceholder)))
-
+		return centerTextStyle(width).Render(lipgloss.JoinVertical(lipgloss.Center, getMutedLabelStyle(m.theme).Render(labelIdlePlaceholder), confirmQuitLabelForCompact))
 	}
-
 }
 
 func getContentWidth(style lipgloss.Style) int {
@@ -107,49 +135,89 @@ func (m model) renderTabStrip() string {
 	return strings.Join(labels, " ")
 }
 
-func clockBox(clock string, theme Theme) string {
-	return getStatusStyle(theme).Render(clock)
-}
-
-func (m model) renderSideBar() string {
+func (m model) renderSidebar(playingPanelStartRow int) string {
 	logoBox := getTitleStyle(m.theme).Render(strings.TrimSpace(logo))
 	titleBox := getTitleStyle(m.theme).Render(appTitle)
 	versionText := getLabelStyle(m.theme).Render(appVersion)
 	top := lipgloss.JoinVertical(lipgloss.Center, logoBox, titleBox, versionText)
 
-	clock := clockBox(m.now.Format("15:04"), m.theme)
-	// pushing clock down to bottom
-	h := panelHeightFor(m.termHeight)
-	innerHeight := h - sidebarStyleFor(m.termHeight, m.theme).GetVerticalFrameSize()
-	spacerLines := max(innerHeight-lipgloss.Height(top)-lipgloss.Height(clock), 0)
-	spacer := strings.Repeat("\n", spacerLines)
+	sidebarStyle := sidebarStyleFor(m.termHeight, m.theme)
+	body := top
+	if m.state == StatePlaying && m.sidebarImage != "" {
+		spacerLines := max(playingPanelStartRow-1-lipgloss.Height(top), 0) // -1: sidebar's own box content starts 1 row below screenthe topEdge label row
+		maxSpacer := max(
+			sidebarStyle.GetHeight()-sidebarStyle.GetVerticalFrameSize()-lipgloss.Height(top)-m.sidebarImageHeight-1, 0)
+		spacerLines = min(spacerLines, maxSpacer)
+		body = top + strings.Repeat("\n", spacerLines+1) + m.sidebarImage
+	}
 
-	content := top + spacer + clock
-	return sidebarStyleFor(m.termHeight, m.theme).Align(lipgloss.Center).Render(content)
+	dateAndTime := strings.ToLower(m.now.Format("Mon 2 Jan.")) + " " + m.now.Format("15:04") // from Phase 31
+	topEdge := getBorderStyle(m.theme).Render(labeledTopEdge(lipgloss.RoundedBorder(), dateAndTime, sidebarWidth))
+	box := sidebarStyle.Align(lipgloss.Center).Render(body)
+	return lipgloss.JoinVertical(lipgloss.Left, topEdge, box)
 }
 
-func (m model) renderFrame(topContent string) tea.View {
+func (m model) renderFrame(topContent, bottomExtra string) tea.View {
+
+	if m.minimal {
+		return renderMinimalTopPanel(m, topContent)
+	}
+
 	tabStrip := m.renderTabStrip()
 	fullTop := lipgloss.JoinVertical(lipgloss.Left, tabStrip, topContent)
 	playingRendered := playingPanelStyleFor(m.availableMainWidth(), m.theme).Render(m.renderPlayingPanel())
 
-	naturalTopHeight := lipgloss.Height(fullTop) + topPanelStyleFor(0, m.availableMainWidth(), m.theme).GetVerticalFrameSize()
-	remaining := max(panelHeightFor(m.termHeight)-lipgloss.Height(playingRendered), naturalTopHeight)
-	topRendered := topPanelStyleFor(remaining, m.availableMainWidth(), m.theme).Render(fullTop)
-	if m.minimal {
-		rule := getTitleStyle(m.theme).Render(nameRule(lipgloss.Width(topRendered)))
-		stacked := lipgloss.JoinVertical(lipgloss.Center, rule, topRendered, playingRendered)
-		v := tea.NewView(stacked)
-		v.AltScreen = true
-		return v
-	}
+	panelStyle := topPanelStyleFor(0, m.availableMainWidth(), m.theme)
 
+	naturalTopHeight := lipgloss.Height(fullTop) + lipgloss.Height(bottomExtra) + panelStyle.GetVerticalFrameSize()
+	remaining := max(panelHeightFor(m.termHeight)-lipgloss.Height(playingRendered), naturalTopHeight)
+
+	finalPanelStyle := topPanelStyleFor(remaining, m.availableMainWidth(), m.theme)
+	innerHeight := remaining - finalPanelStyle.GetVerticalFrameSize()
+	innerWidth := getContentWidth(finalPanelStyle)
+
+	fullTopContent := fullTop
+	if bottomExtra != "" {
+		leftover := max(innerHeight-lipgloss.Height(fullTop), 0)
+		placed := lipgloss.Place(innerWidth, leftover, lipgloss.Center, lipgloss.Bottom, bottomExtra)
+		fullTopContent = lipgloss.JoinVertical(lipgloss.Left, fullTop, placed)
+	}
+	topRendered := finalPanelStyle.Render(fullTopContent)
+	sideBar := m.renderSidebar(lipgloss.Height(topRendered))
 	stackedColumn := lipgloss.JoinVertical(lipgloss.Left, topRendered, playingRendered)
-	sideBar := m.renderSideBar()
 
 	fullContent := lipgloss.JoinHorizontal(lipgloss.Top, sideBar, stackedColumn)
 	v := tea.NewView(fullContent)
 	v.AltScreen = true
+	v.WindowTitle = m.windowTitle()
+	return v
+}
+
+func renderMinimalTopPanel(m model, content string) tea.View {
+	width := max(m.availableMainWidth(), 40)
+
+	topLabel := appTitle
+	if len(m.tabs) > 0 {
+		topLabel = topLabel + ":" + m.tabs[m.activeTab]
+	}
+
+	bottomLabel := labelPlayingPanelMinimalTopBorder
+	if m.err != nil {
+		bottomLabel = labelErrorPanelMinimalTopBorder
+	}
+	bottomContent := m.renderPlayingPanel()
+
+	frameSize := minimalBoxStyleFor(0, 0, m.theme).GetVerticalFrameSize()
+	topBoxHeight := lipgloss.Height(content) + frameSize
+	bottomBoxHeight := max(panelHeightFor(m.termHeight)-topBoxHeight-2, lipgloss.Height(bottomContent)+frameSize)
+
+	topBox := renderLabeledBox(topLabel, width, topBoxHeight, m.theme, content)
+	bottomBox := renderLabeledBox(bottomLabel, width, bottomBoxHeight, m.theme, bottomContent)
+
+	stacked := lipgloss.JoinVertical(lipgloss.Left, topBox, bottomBox)
+	v := tea.NewView(stacked)
+	v.AltScreen = true
+	v.WindowTitle = m.windowTitle()
 	return v
 }
 
@@ -158,6 +226,7 @@ func (m model) themePickerView() tea.View {
 	content := lipgloss.JoinVertical(lipgloss.Top, m.themeList.View())
 	v := tea.NewView(content)
 	v.AltScreen = true
+	v.WindowTitle = m.windowTitle()
 	return v
 }
 
@@ -188,21 +257,25 @@ func (m model) View() tea.View {
 }
 
 func (m model) idleView() tea.View {
-	header := m.defaultHeader()
+	header := labelYtbPlayer
 	label := getLabelStyle(m.theme).Render(labelEnterURL)
 	footerStyled := m.topPanelFooter(idleKeys)
 	title := getTitleStyle(m.theme).Render(header)
 	textInputView := m.textInput.View()
 
 	content := lipgloss.JoinVertical(lipgloss.Top, title, label, textInputView, footerStyled)
-	c := m.setCursor(header, topPanelStyleFor(panelHeightFor(m.termHeight), m.availableMainWidth(), m.theme), label)
-	v := m.renderFrame(content)
+	panelStyle := topPanelStyleFor(panelHeightFor(m.termHeight), m.availableMainWidth(), m.theme)
+	if m.minimal {
+		panelStyle = minimalBoxStyleFor(m.availableMainWidth(), panelHeightFor(m.termHeight), m.theme)
+	}
+	c := m.setCursor(header, panelStyle, label)
+	v := m.renderFrame(content, "")
 	v.Cursor = c
 	return v
 }
 
 func (m model) errorView() tea.View {
-	header := m.defaultHeader()
+	header := labelYtbPlayer
 	label := getLabelStyle(m.theme).Render(labelEnterURL)
 	footerStyled := m.topPanelFooter(idleKeys)
 	textInputView := m.textInput.View()
@@ -210,14 +283,18 @@ func (m model) errorView() tea.View {
 
 	content := lipgloss.JoinVertical(lipgloss.Top, title, label, textInputView, footerStyled)
 
-	c := m.setCursor(header, topPanelStyleFor(panelHeightFor(m.termHeight), m.availableMainWidth(), m.theme), label)
-	v := m.renderFrame(content)
+	panelStyle := topPanelStyleFor(panelHeightFor(m.termHeight), m.availableMainWidth(), m.theme)
+	if m.minimal {
+		panelStyle = minimalBoxStyleFor(m.availableMainWidth(), panelHeightFor(m.termHeight), m.theme)
+	}
+	c := m.setCursor(header, panelStyle, label)
+	v := m.renderFrame(content, "")
 	v.Cursor = c
 	return v
 }
 
 func (m model) stoppedView() tea.View {
-	header := m.defaultHeader()
+	header := labelYtbPlayer
 	playAnother := ""
 	if m.err == nil {
 		playAnother = getLabelStyle(m.theme).Render(labelPlayAnother)
@@ -227,15 +304,23 @@ func (m model) stoppedView() tea.View {
 	textInputView := m.textInput.View()
 
 	content := lipgloss.JoinVertical(lipgloss.Top, title, playAnother, textInputView, footerStyled)
-	c := m.setCursor(header, topPanelStyleFor(panelHeightFor(m.termHeight), m.availableMainWidth(), m.theme), playAnother)
-	v := m.renderFrame(content)
+	panelStyle := topPanelStyleFor(panelHeightFor(m.termHeight), m.availableMainWidth(), m.theme)
+	if m.minimal {
+		panelStyle = minimalBoxStyleFor(m.availableMainWidth(), panelHeightFor(m.termHeight), m.theme)
+	}
+	c := m.setCursor(header, panelStyle, playAnother)
+	v := m.renderFrame(content, "")
 	v.Cursor = c
 	return v
 }
 
 func (m model) playingView() tea.View {
-	header := m.defaultHeader()
 	statusView := "\n" + m.playingSpinner.View() + " Playing\n"
+	upNextLine := ""
+	if m.queueIndex+1 < len(m.queue) {
+		upNextLine = "\n" + getMutedLabelStyle(m.theme).Render("Up next: "+m.queue[m.queueIndex+1].Title)
+	}
+
 	switch {
 	case m.pausePending && m.player.IsPaused():
 		statusView = "\n" + m.loadingSpinner.View() + " Resuming...\n"
@@ -244,39 +329,50 @@ func (m model) playingView() tea.View {
 	case m.player.IsPaused():
 		statusView = "\n⏸  Paused\n"
 	}
-	audioInfo := ""
-	if m.metadata.Title != "" {
-		audioInfo = audioInfo + m.metadata.Title
+	status := getStatusStyle(m.theme).Render(statusView) + upNextLine
+
+	keys := playingKeys
+	keys.Next.SetEnabled(m.queueIndex+1 < len(m.queue))
+	keys.Prev.SetEnabled(m.queueIndex > 0)
+	playingFooter := m.topPanelFooter(keys)
+
+	if m.minimal {
+		content := lipgloss.JoinVertical(lipgloss.Top, status, playingFooter)
+		return m.renderFrame(content, "")
 	}
 
+	header := labelYtbPlayer
+	audioInfo := ""
+	if m.metadata.Title != "" {
+		audioInfo = m.metadata.Title
+	}
 	title := getTitleStyle(m.theme).Render(header)
-	status := getStatusStyle(m.theme).Render(statusView)
 	topPanelWidth := getContentWidth(topPanelStyleFor(panelHeightFor(m.termHeight), m.availableMainWidth(), m.theme))
 	audioTitle := getLabelStyle(m.theme).Render(utils.TruncateTitle(audioInfo, topPanelWidth))
-
-	playingFooter := m.topPanelFooter(playingKeys)
+	visualizer := "\n" + renderVisualizer(m.visualizerBars, m.availableMainWidth(), m.theme)
 
 	content := lipgloss.JoinVertical(lipgloss.Top, title, status, audioTitle, playingFooter)
-
-	v := m.renderFrame(content)
-	return v
+	return m.renderFrame(content, visualizer)
 }
 
 func (m model) loadingView() tea.View {
-	header := m.defaultHeader()
+	header := labelYtbPlayer
 	title := getTitleStyle(m.theme).Render(header)
 	loadingLabel := getLabelStyle(m.theme).Render(labelLoading)
 	content := lipgloss.JoinVertical(lipgloss.Top, title, loadingLabel)
 
-	v := m.renderFrame(content)
+	v := m.renderFrame(content, "")
 	v.ProgressBar = tea.NewProgressBar(tea.ProgressBarIndeterminate, 0)
 	return v
 }
 
 func (m model) inputRowOffset(panel lipgloss.Style, header string, others ...string) int {
-	y := lipgloss.Height(m.renderTabStrip())
+	y := 0
+	if !m.minimal {
+		y = lipgloss.Height(m.renderTabStrip())
+	}
 	if m.minimal {
-		y++ // for the top header "nameRule"
+		y++ // for the top border
 	}
 	y += lipgloss.Height(header)
 	for _, other := range others {
@@ -289,7 +385,7 @@ func (m model) inputRowOffset(panel lipgloss.Style, header string, others ...str
 func (m model) inputColumnBounds(panel lipgloss.Style) (minX, maxX int) {
 	minX = panel.GetPaddingLeft() + panel.GetBorderLeftSize()
 	if !m.minimal {
-		minX += lipgloss.Width(m.renderSideBar())
+		minX += lipgloss.Width(m.renderSidebar(0))
 	}
 	maxX = minX + m.textInput.Width()
 	return minX, maxX
@@ -307,5 +403,3 @@ func (m model) setCursor(header string, panel lipgloss.Style, others ...string) 
 	}
 	return c
 }
-
-func (m model) defaultHeader() string { return "Youtube audio player" }

@@ -2,6 +2,8 @@ package player
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -14,11 +16,15 @@ import (
 	"syscall"
 	"time"
 
-	utils "github.com/sina96/ytunes/internal/utils"
+	"github.com/sina96/ytunes/internal/utils"
 )
 
+const ipcTimeout = 2 * time.Second
+
+const maxRadioQueueEntries = 50
+
 type Player interface {
-	Play(url string) (Metadata, error)
+	Play(url string, index int, queue []QueueEntry) (Metadata, error)
 	Pause() error
 	Resume() error
 	Stop() error
@@ -26,12 +32,27 @@ type Player interface {
 	IsPlaying() bool
 	IsPaused() bool
 	Position() (float64, error)
+	ResolveQueue(url string) ([]QueueEntry, error)
 }
 
 type Metadata struct {
 	Title           string
 	Duration        string
 	DurationSeconds int
+}
+
+type QueueEntry struct {
+	ID    string
+	Title string
+}
+
+type flatPlaylistResult struct {
+	Type    string `json:"_type"`
+	ID      string `json:"id"`
+	Entries []struct {
+		ID    string `json:"id"`
+		Title string `json:"title"`
+	} `json:"entries"`
 }
 
 type mpvPlayer struct {
@@ -66,24 +87,33 @@ func (p *mpvPlayer) sendIPC(command []any) (json.RawMessage, error) {
 		return nil, fmt.Errorf("failed to marshal IPC command: %w", err)
 	}
 
+	if err := p.ipcConn.SetDeadline(time.Now().Add(ipcTimeout)); err != nil {
+		return nil, fmt.Errorf("failed to set IPC deadline: %w", err)
+	}
+
 	if _, err := p.ipcConn.Write(append(message, '\n')); err != nil {
 		return nil, fmt.Errorf("failed to send IPC command: %w", err)
 	}
 
-	line, err := p.ipcReader.ReadString('\n')
-	if err != nil {
-		return nil, err
-	}
+	//skip anything that isn't the reply to this specific request
+	for {
+		line, err := p.ipcReader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
 
-	var reply ipcReply
-	if err := json.Unmarshal([]byte(line), &reply); err != nil {
-		return nil, err
+		var reply ipcReply
+		if err := json.Unmarshal([]byte(line), &reply); err != nil {
+			continue // malformed line, keep reading
+		}
+		if reply.RequestID != id {
+			continue // an event, or a stale reply to an older request
+		}
+		if reply.Error != "success" {
+			return nil, fmt.Errorf("mpv ipc error: %s", reply.Error)
+		}
+		return reply.Data, nil
 	}
-	if reply.Error != "success" {
-		return nil, fmt.Errorf("mpv ipc error: %s", reply.Error)
-	}
-	return reply.Data, nil
-
 }
 
 func newSocketPath() string {
@@ -99,36 +129,67 @@ func buildPlayCommand(url string, ipcPath string) (*exec.Cmd, string, error) {
 
 	mpvPath, err := exec.LookPath("mpv")
 	if err != nil {
-		return nil, "", fmt.Errorf("mpv not found. Please install it and try again.")
+		return nil, "", fmt.Errorf("mpv not found. Please install it and try again")
 	}
 
-	cmd := exec.Command(mpvPath, "--no-video", "--ytdl-format=bestaudio", "--input-ipc-server="+ipcPath, trimmedUrl)
+	// workaround for YouTube's current anti-bot/PO-Token 403s the
+	// Still not a guaranteed fix.
+	// More reliable options (browser cookies, a PO-Token provider) exist. maybe in future.
+	extractorArgs := "youtube:player_client=web_embedded,android_vr,web,tv"
+	rawOptions := fmt.Sprintf("extractor-args=%%%d%%%s", len(extractorArgs), extractorArgs)
+
+	cmd := exec.Command(mpvPath, "--no-video", "--ytdl-format=bestaudio", "--ytdl-raw-options="+rawOptions, "--input-ipc-server="+ipcPath, trimmedUrl)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	return cmd, trimmedUrl, nil
 }
 
 func connectIPC(path string) (net.Conn, error) {
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(ipcTimeout)
 	for {
 		conn, err := net.Dial("unix", path)
 		if err == nil {
 			return conn, nil
 		}
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("failed to connect to IPC socket: %w", err)
+			return nil, fmt.Errorf("couldn't connect to mpv, try again")
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// friendlyYtdlpError turns yt-dlp's stderr into a short msg
+func friendlyYtdlpError(stderr string) string {
+	switch {
+	case strings.Contains(stderr, "Sign in to confirm"):
+		return "yt thinks you are a bot :( try again later or from a diff network"
+	case strings.Contains(stderr, "Private video"):
+		return "this video is private"
+	case strings.Contains(stderr, "Video unavailable"):
+		return "this video isn't available (removed, region-locked, or age-restricted)"
+	case strings.Contains(stderr, "Unsupported URL"):
+		return "that doesn't look like a supported YouTube URL"
+	default:
+		trimmed := strings.TrimSpace(stderr)
+		if trimmed == "" {
+			return "yt-dlp failed for an unknown reason"
+		}
+		return trimmed
 	}
 }
 
 func fetchMetadata(url string) (Metadata, error) {
 	ytbdlpPath, err := exec.LookPath("yt-dlp")
 	if err != nil {
-		return Metadata{}, fmt.Errorf("yt-dlp not found. Please install it and try again.")
+		return Metadata{}, fmt.Errorf("yt-dlp not found. Please install it and try again")
 	}
-	cmd := exec.Command(ytbdlpPath, "--no-playlist", "--print", "title,duration", url)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, ytbdlpPath, "--no-playlist", "--print", "title,duration", url)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	stdout, err := cmd.Output()
 	if err != nil {
-		return Metadata{}, err
+		return Metadata{}, fmt.Errorf("%s", friendlyYtdlpError(stderr.String()))
 	}
 	lines := strings.Split(string(stdout), "\n")
 	if len(lines) < 2 {
@@ -143,12 +204,55 @@ func fetchMetadata(url string) (Metadata, error) {
 	return Metadata{Title: title, Duration: duration, DurationSeconds: seconds}, nil
 }
 
-func (p *mpvPlayer) Play(url string) (Metadata, error) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	p.paused = false
+func fetchPlayUrlForQueue(url string, index int, queue []QueueEntry) string {
+	if len(queue) == 0 || index < 0 || index >= len(queue) {
+		return url
+	}
+	return "https://www.youtube.com/watch?v=" + queue[index].ID
+}
 
+func (p *mpvPlayer) ResolveQueue(url string) ([]QueueEntry, error) {
+	ytbdlpPath, err := exec.LookPath("yt-dlp")
+	if err != nil {
+		return nil, fmt.Errorf("yt-dlp not found. Please install it and try again")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, ytbdlpPath, "--flat-playlist", "--dump-single-json", url)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	stdout, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("%s", friendlyYtdlpError(stderr.String()))
+	}
+	var result flatPlaylistResult
+	if err := json.Unmarshal(stdout, &result); err != nil {
+		return nil, err
+	}
+
+	if result.Type != "playlist" {
+		return nil, nil
+	}
+
+	entries := make([]QueueEntry, 0, len(result.Entries))
+	for _, entry := range result.Entries {
+		if entry.ID == "" {
+			continue
+		}
+		entries = append(entries, QueueEntry{ID: entry.ID, Title: entry.Title})
+	}
+	isRadio := strings.HasPrefix(result.ID, "RD")
+	if isRadio && len(entries) > maxRadioQueueEntries {
+		entries = entries[:maxRadioQueueEntries]
+	}
+
+	return entries, nil
+}
+
+func (p *mpvPlayer) Play(url string, index int, queue []QueueEntry) (Metadata, error) {
 	ipcPath := newSocketPath()
+	url = fetchPlayUrlForQueue(url, index, queue)
 	playCmd, url, err := buildPlayCommand(url, ipcPath)
 	if err != nil {
 		return Metadata{}, err
@@ -159,20 +263,24 @@ func (p *mpvPlayer) Play(url string) (Metadata, error) {
 		return Metadata{}, err
 	}
 
+	if err := playCmd.Start(); err != nil { // process start, no lock held
+		return Metadata{}, err
+	}
+
+	conn, err := connectIPC(ipcPath) // IPC connect,  no lock held
+	if err != nil {
+		// playCmd already started
+		_ = playCmd.Process.Kill()
+		return Metadata{}, err
+	}
+
+	p.mutex.Lock()
+	p.paused = false
 	p.cmd = playCmd
 	p.ipcPath = ipcPath
-
-	err = p.cmd.Start()
-	if err != nil {
-		return Metadata{}, err
-	}
-
-	conn, err := connectIPC(ipcPath)
-	if err != nil {
-		return Metadata{}, err
-	}
 	p.ipcConn = conn
 	p.ipcReader = bufio.NewReader(conn)
+	p.mutex.Unlock()
 
 	return meta, nil
 }
@@ -217,7 +325,7 @@ func (p *mpvPlayer) Stop() error {
 	}
 	if p.paused {
 		if p.cmd.Process != nil {
-			err := p.cmd.Process.Signal(syscall.SIGCONT)
+			err := syscall.Kill(-p.cmd.Process.Pid, syscall.SIGCONT)
 			if err != nil {
 				return err
 			}
@@ -225,7 +333,7 @@ func (p *mpvPlayer) Stop() error {
 	}
 	p.paused = false
 	if p.cmd.Process != nil {
-		err := p.cmd.Process.Signal(syscall.SIGINT)
+		err := syscall.Kill(-p.cmd.Process.Pid, syscall.SIGINT)
 		if err != nil {
 			return err
 		}
@@ -243,16 +351,18 @@ func (p *mpvPlayer) Wait() error {
 	}
 	err := cmd.Wait()
 	p.mutex.Lock()
-	p.cmd = nil
-	p.paused = false
-	if p.ipcConn != nil {
-		p.ipcConn.Close()
-		p.ipcConn = nil
-		p.ipcReader = nil
-	}
-	if p.ipcPath != "" {
-		os.Remove(p.ipcPath)
-		p.ipcPath = ""
+	if p.cmd == cmd {
+		p.cmd = nil
+		p.paused = false
+		if p.ipcConn != nil {
+			p.ipcConn.Close()
+			p.ipcConn = nil
+			p.ipcReader = nil
+		}
+		if p.ipcPath != "" {
+			os.Remove(p.ipcPath)
+			p.ipcPath = ""
+		}
 	}
 	p.mutex.Unlock()
 	return err

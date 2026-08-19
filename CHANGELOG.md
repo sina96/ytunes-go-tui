@@ -2,7 +2,42 @@
 
 One-liner summary of the biggest thing each development phase added.
 
-## v0.1.0 (latest)
+## v0.1.1 (latest)
+
+- `--help`/`-h` now prints a proper usage message instead of Go's bare
+  default; `--version` prints the current version and exits.
+- Startup update-check: a silent, one-time GitHub-releases lookup shown
+  as a small notice on the idle screen when a newer version exists.
+- `--minimal` mode redesigned with named/labeled panel borders
+  (`lipgloss`-drawn, title spliced into the border itself).
+- Sidebar's top border now doubles as a live clock + date label
+  (`tue 18 aug. 01:23`), full mode only.
+- A static mosaic image (Unicode block-character rendering, via
+  `charmbracelet/x/mosaic`) now appears at the bottom of the sidebar
+  while a track is playing.
+- Retro decorative visualizer bars while a track is playing.
+- Fixed a real input bug: typing a URL containing a lowercase `h` or
+  `l` could silently drop that character, because the queue Next/Prev
+  keybindings intercepted it even outside playback/queue mode.
+- General polish pass: consistent panel padding, a unified progress-bar
+  gradient, and layout fixes removing dead space in both full and
+  minimal modes.
+- Playlist & radio support: paste a playlist/radio URL with "Queue
+  Mode" on (`ctrl+q`, off by default) to build a queue with Next/Prev
+  and auto-advance; a track that fails to play is skipped instead of
+  ending the whole queue.
+- mpv process lifecycle hardening: fixed an orphaned mpv process when
+  skipping tracks, plus a fallback YouTube player-client list that
+  reduces (not eliminates) playback 403s from YouTube's current
+  anti-bot enforcement.
+- Terminal window/tab title now reflects live state (`y𝕋unes`,
+  `y𝕋unes • Playing`, `y𝕋unes • Paused`).
+- Theme choice now persists across restarts (`~/.config/ytunes/theme`).
+- Release automation: tagging `vX.Y.Z` now builds and publishes
+  cross-platform binaries (linux/darwin, amd64/arm64) via GoReleaser
+  and GitHub Actions, no more manual per-platform builds.
+
+## v0.1.0
 
 - Real mpv IPC: live playback position and clean pause/resume, no more
   audible `SIGSTOP` artifact.

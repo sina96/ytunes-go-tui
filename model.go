@@ -1,6 +1,7 @@
 package main
 
 import (
+	"image"
 	"time"
 
 	"charm.land/bubbles/v2/help"
@@ -11,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/charmbracelet/harmonica"
 	"github.com/sina96/ytunes/internal/player"
 )
 
@@ -24,30 +26,45 @@ const (
 )
 
 type model struct {
-	minimal         bool
-	now             time.Time
-	tabs            []string
-	activeTab       int
-	termWidth       int
-	termHeight      int
-	textInput       textinput.Model
-	err             error
-	state           State
-	player          player.Player
-	metadata        player.Metadata
-	userStopped     bool
-	confirmQuitting bool
-	quitArmedAt     time.Time
-	loadingSpinner  spinner.Model
-	playingSpinner  spinner.Model
-	elapsedSeconds  float64
-	positionSeq     int
-	pausePending    bool
-	progress        progress.Model
-	help            help.Model
-	theme           Theme
-	pickingTheme    bool
-	themeList       list.Model
+	minimal               bool
+	playlistMode          bool
+	now                   time.Time
+	tabs                  []string
+	activeTab             int
+	termWidth             int
+	termHeight            int
+	textInput             textinput.Model
+	err                   error
+	state                 State
+	player                player.Player
+	queue                 []player.QueueEntry
+	queueIndex            int
+	metadata              player.Metadata
+	userStopped           bool
+	confirmQuitting       bool
+	quitArmedAt           time.Time
+	loadingSpinner        spinner.Model
+	playingSpinner        spinner.Model
+	elapsedSeconds        float64
+	awaitingPlaybackStart bool
+	positionSeq           int
+	pausePending          bool
+	tickGen               int
+	playGen               int
+	progress              progress.Model
+	help                  help.Model
+	theme                 Theme
+	pickingTheme          bool
+	themeList             list.Model
+	showQueueModeLabel    bool
+	queueModeShownAt      time.Time
+	visualizerBars        []visualizerBar
+	visualizerSpring      harmonica.Spring
+	sidebarImageSrc       image.Image
+	sidebarImage          string
+	sidebarImageWidth     int
+	sidebarImageHeight    int
+	latestVersion         string
 }
 
 func newTextInput() textinput.Model {
@@ -69,7 +86,7 @@ func (m model) resetTextInput() (model, tea.Cmd) {
 
 func (m model) availableMainWidth() int {
 	if m.minimal {
-		return m.termWidth - 4 // small margin, no sidebar to reserve for
+		return m.termWidth // small margin, no sidebar to reserve for
 	}
-	return m.termWidth - lipgloss.Width(m.renderSideBar())
+	return m.termWidth - lipgloss.Width(m.renderSidebar(0))
 }
